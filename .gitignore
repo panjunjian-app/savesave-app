@@ -1,0 +1,26 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Signing / secrets (never commit)
+android/key.properties
+**/*.jks
+**/*.keystore
+ios/*.mobileprovision
+ios/Runner/GoogleService-Info.plist
+
+# Keep lockfile and generated code in version control for reproducible builds.

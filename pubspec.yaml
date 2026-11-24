@@ -1,0 +1,56 @@
+name: savesave
+description: "省省钱，存存钱 - 本地优先的记账与储蓄目标管理 App"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理 / 路由
+  flutter_riverpod: 2.6.1
+  go_router: 14.8.1
+
+  # 本地数据库
+  drift: 2.35.4
+  drift_flutter: 0.3.1
+  sqlite3_flutter_libs: 0.6.0+eol
+  path_provider: 2.1.6
+  path: 1.9.1
+
+  # 不可变模型 / 序列化
+  freezed_annotation: 3.1.0
+  json_annotation: 4.12.0
+
+  # 平台能力
+  flutter_secure_storage: 9.2.4
+  image_picker: 1.2.4
+
+  # 网络（BYOK AI）
+  dio: 5.11.1
+  crypto: 3.0.8
+
+  # 展示 / 计算 / 设置
+  fl_chart: 0.68.0
+  decimal: 2.3.3
+  intl: 0.19.0
+  shared_preferences: 2.5.6
+  csv: 6.0.0
+  package_info_plus: 8.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: 2.17.1
+  drift_dev: 2.35.3
+  freezed: 4.0.3
+  json_serializable: 6.15.2
+  flutter_lints: 4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

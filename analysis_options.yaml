@@ -1,0 +1,28 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    invalid_annotation_target: ignore
+    # The bundled Flutter preview SDK marks the whole material.dart library
+    # (and Color.value) as deprecated in favor of a `material_ui` package that
+    # does not exist in stable Flutter. Suppress this SDK-only noise so the
+    # project stays clean on both preview and stable channels.
+    deprecated_member_use: ignore
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - macos/**
+
+linter:
+  rules:
+    always_declare_return_types: true
+    avoid_print: true
+    avoid_relative_lib_imports: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_final_locals: true
+    sort_child_properties_last: true
+    unnecessary_this: true
+    use_key_in_widget_constructors: true

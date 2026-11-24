@@ -1,0 +1,9 @@
+# Copy this file to android/key.properties and fill in your own release
+# signing details. The real key.properties and *.jks are gitignored.
+# Generate a keystore with:
+#   keytool -genkey -v -keystore ~/savesave-release.jks -keyalg RSA \
+#     -keysize 2048 -validity 10000 -alias savesave
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=savesave
+storeFile=/absolute/path/to/savesave-release.jks
