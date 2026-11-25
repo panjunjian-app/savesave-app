@@ -1,7 +1,7 @@
 name: savesave
 description: "省省钱，存存钱 - 本地优先的记账与储蓄目标管理 App"
 publish_to: "none"
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ">=3.13.0 <4.0.0"
@@ -41,6 +41,7 @@ dependencies:
   shared_preferences: 2.5.6
   csv: 6.0.0
   package_info_plus: 8.3.1
+  open_filex: 4.7.0
 
 dev_dependencies:
   flutter_test:

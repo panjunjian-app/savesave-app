@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Required by the BYOK AI client (HTTP calls to user-configured endpoint). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 应用内更新：下载 APK 后唤起系统安装器（用户仍需在系统中授权一次） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:label="省省钱，存存钱"
         android:name="${applicationName}"

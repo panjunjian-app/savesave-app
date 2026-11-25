@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,14 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
   bool _analysisConsent = false;
   bool _imageConsent = false;
   String _masked = '';
+
+  /// 自动重试状态：当前第几次尝试、倒计时剩余秒数、取消用的定时器。
+  int _retryRound = 0;
+  int _retryCountdown = 0;
+  Timer? _retryTimer;
+
+  /// 用户点「停止自动重试」后置 true，循环据此退出。
+  bool _retryCancelled = false;
 
   @override
   void initState() {
@@ -65,37 +75,97 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
     }
   }
 
+  /// 测试连接：遇到限流（1302/1305/1308/1310）或网络抖动时**自动重试**，
+  /// 间隔 1 分钟，最多 10 次；10 次都失败才把错误展示给用户。
+  ///
+  /// Key 无效（1001-1005）、账户欠费（1113）这类重试无意义的原因不重试，
+  /// 直接给出具体原因与处理建议。
   Future<void> _test() async {
+    _retryTimer?.cancel();
     setState(() {
       _testing = true;
       _message = null;
+      _retryRound = 0;
+      _retryCountdown = 0;
+      _retryCancelled = false;
     });
-    try {
-      final probe = await ref.read(aiClientProvider).testConnection();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(AiPrefsKeys.keyVerified, probe.ok);
-      if (mounted) {
+
+    const maxAttempts = 10;
+    const retryDelay = Duration(minutes: 1);
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (!mounted || _retryCancelled) {
+        return;
+      }
+      setState(() {
+        _retryRound = attempt;
+        _retryCountdown = 0;
+      });
+
+      ConnectionProbe probe;
+      try {
+        probe = await ref.read(aiClientProvider).testConnection();
+      } catch (error) {
+        probe = ConnectionProbe(ConnectionResult.networkError, '测试失败：$error', true);
+      }
+      if (!mounted) {
+        return;
+      }
+
+      if (probe.ok) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(AiPrefsKeys.keyVerified, true);
+        if (!mounted) {
+          return;
+        }
         setState(() {
-          _verified = probe.ok;
-          _message = probe.ok
+          _verified = true;
+          _testing = false;
+          _message = attempt == 1
               ? '连接成功，AI 功能已启用'
-              // 优先展示上游具体原因（含智谱错误码），便于用户定位是
-              // Key 问题、欠费、模型下线还是限流。
-              : (probe.detail ?? switch (probe.result) {
-                  ConnectionResult.success => '连接成功，AI 功能已启用',
-                  ConnectionResult.invalidKeyOrQuota => 'Key 无效或额度不足，请检查后重试',
-                  ConnectionResult.networkError => '网络异常，请稍后重试',
-                });
+              : '连接成功（第 $attempt 次尝试），AI 功能已启用';
         });
         ref.invalidate(aiAvailabilityProvider);
+        return;
       }
-    } catch (error) {
-      if (mounted) {
-        setState(() => _message = '测试失败：$error');
+
+      final detail = probe.detail ?? '连接失败，请稍后重试';
+      final canRetry = probe.retryable && attempt < maxAttempts;
+      if (!canRetry) {
+        final reason = probe.retryable
+            ? '$detail（已自动重试 $maxAttempts 次仍未成功）'
+            : detail;
+        if (attempt > 1 || probe.retryable) {
+          // 记录重试过程，便于用户知道系统确实努力过
+          setState(() {
+            _verified = false;
+            _testing = false;
+            _message = reason;
+          });
+        } else {
+          setState(() {
+            _verified = false;
+            _testing = false;
+            _message = reason;
+          });
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(AiPrefsKeys.keyVerified, false);
+        ref.invalidate(aiAvailabilityProvider);
+        return;
       }
-    } finally {
-      if (mounted) {
-        setState(() => _testing = false);
+
+      // 进入倒计时等待，期间可被「取消」中断
+      for (var remaining = retryDelay.inSeconds; remaining > 0; remaining--) {
+        if (!mounted || _retryCancelled) {
+          return;
+        }
+        setState(() {
+          _retryCountdown = remaining;
+          _message = '$detail\n将于 $remaining 秒后自动重试'
+              '（第 ${attempt + 1}/$maxAttempts 次）';
+        });
+        await Future<void>.delayed(const Duration(seconds: 1));
       }
     }
   }
@@ -144,6 +214,7 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _keyController.dispose();
     super.dispose();
   }
@@ -197,8 +268,24 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
           const SizedBox(height: 8),
           OutlinedButton(
             onPressed: _testing ? null : _test,
-            child: Text(_testing ? '测试中...' : '测试连接'),
+            child: Text(
+              _testing
+                  ? (_retryCountdown > 0
+                      ? '自动重试中…（第 $_retryRound/10 次，$_retryCountdown 秒后重试）'
+                      : '测试中…（第 $_retryRound/10 次）')
+                  : '测试连接',
+            ),
           ),
+          if (_testing && _retryCountdown > 0)
+            TextButton(
+              onPressed: () => setState(() {
+                _retryCancelled = true;
+                _testing = false;
+                _retryCountdown = 0;
+                _message = '已停止自动重试';
+              }),
+              child: const Text('停止自动重试'),
+            ),
           const SizedBox(height: 8),
           Row(
             children: <Widget>[

@@ -17,6 +17,7 @@ import '../features/settings/ai_config_page.dart';
 import '../features/settings/profile_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/settings/sync_settings_page.dart';
+import '../features/settings/update_page.dart';
 import '../features/stats/stats_page.dart';
 import '../state/auth_providers.dart';
 
@@ -92,6 +93,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings/sync',
         builder: (context, state) => const SyncSettingsPage(),
+      ),
+      GoRoute(
+        path: '/settings/update',
+        builder: (context, state) => const UpdatePage(),
       ),
       GoRoute(
         path: '/upgrade-cloud',

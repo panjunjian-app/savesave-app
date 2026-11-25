@@ -21,12 +21,15 @@ enum ConnectionResult { success, invalidKeyOrQuota, networkError }
 /// `1003` Key 过期、`1113` 账户欠费、`1211` 模型不存在、`1302` 限流，
 /// 若只笼统提示「Key 无效或额度不足」，用户根本无法定位。
 class ConnectionProbe {
-  const ConnectionProbe(this.result, [this.detail]);
+  const ConnectionProbe(this.result, [this.detail, this.retryable = false]);
 
   final ConnectionResult result;
 
   /// 具体原因（含上游业务错误码）；成功时为 null。
   final String? detail;
+
+  /// 是否值得自动重试（限流/网络类为 true，Key 无效与欠费为 false）。
+  final bool retryable;
 
   bool get ok => result == ConnectionResult.success;
 }
@@ -366,12 +369,19 @@ class AiClient {
         token: CancelToken(),
       );
       return const ConnectionProbe(ConnectionResult.success);
+    } on AiRateLimitFailure catch (error) {
+      return ConnectionProbe(
+        ConnectionResult.invalidKeyOrQuota,
+        error.message,
+        true,
+      );
     } on AiAuthFailure catch (error) {
       return ConnectionProbe(ConnectionResult.invalidKeyOrQuota, error.message);
     } on AiQuotaFailure catch (error) {
       return ConnectionProbe(ConnectionResult.invalidKeyOrQuota, error.message);
     } on AiFailure catch (error) {
-      return ConnectionProbe(ConnectionResult.networkError, error.message);
+      // 网络不可达/超时通常是一过性的，交给调用方按退避重试。
+      return ConnectionProbe(ConnectionResult.networkError, error.message, true);
     }
   }
 
@@ -549,7 +559,7 @@ class AiClient {
         case '1305':
         case '1308':
         case '1310':
-          throw AiQuotaFailure(
+          throw AiRateLimitFailure(
             '智谱侧限制（错误码 ${upstream.code}）：${upstream.message}。'
             '免费模型有并发/频率上限，请稍等 1 分钟再试。',
           );
@@ -564,7 +574,8 @@ class AiClient {
       throw const AiAuthFailure();
     }
     if (status == 429) {
-      throw const AiQuotaFailure();
+      // 无业务码的 429 按限流处理（可重试）；带 1113 的情况已在上方判为欠费。
+      throw const AiRateLimitFailure();
     }
     if (status != null && status >= 500) {
       throw const AiNetworkFailure();

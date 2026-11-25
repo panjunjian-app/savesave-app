@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router.dart';
 import 'core/theme.dart';
+import 'domain/services/update_service.dart';
 import 'state/providers.dart';
 
 Future<void> main() async {
@@ -25,6 +26,9 @@ Future<void> main() async {
   //    云端会话存在时编排器会自动执行增量首拉（水位 0 → 全量）。
   container.read(syncOrchestratorProvider);
 
+  // 3) 后台静默检查新版本（仅 Android；失败不打扰用户）。
+  container.read(updateServiceProvider).check(silent: true);
+
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -37,6 +41,9 @@ Future<void> main() async {
 class SaveSaveApp extends ConsumerWidget {
   const SaveSaveApp({super.key});
 
+  static final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
@@ -46,7 +53,60 @@ class SaveSaveApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.light,
       routerConfig: router,
+      scaffoldMessengerKey: _messengerKey,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return _UpdateNotifier(
+          messengerKey: _messengerKey,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
+}
+
+/// 监听更新状态，发现新版本时用一条 SnackBar 提示（不打断当前操作）。
+class _UpdateNotifier extends ConsumerStatefulWidget {
+  const _UpdateNotifier({required this.messengerKey, required this.child});
+
+  final GlobalKey<ScaffoldMessengerState> messengerKey;
+  final Widget child;
+
+  @override
+  ConsumerState<_UpdateNotifier> createState() => _UpdateNotifierState();
+}
+
+class _UpdateNotifierState extends ConsumerState<_UpdateNotifier> {
+  bool _announced = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 启动时容器已发起一次检查；这里只负责把结果转成提示。
+    ref.read(updateServiceProvider).stream.listen((state) {
+      if (!mounted || _announced) {
+        return;
+      }
+      if (state.phase == UpdatePhase.available && state.release != null) {
+        _announced = true;
+        final messenger = widget.messengerKey.currentState;
+        if (messenger == null) {
+          return;
+        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('发现新版本 ${state.release!.versionName}，可直接在 App 内更新'),
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: '去更新',
+              onPressed: () => ref.read(goRouterProvider).go('/settings/update'),
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

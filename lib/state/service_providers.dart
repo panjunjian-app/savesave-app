@@ -9,6 +9,7 @@ import '../domain/services/goal_service.dart';
 import '../domain/services/ledger_service.dart';
 import '../domain/services/period_range_resolver.dart';
 import '../domain/services/statistics_service.dart';
+import '../domain/services/update_service.dart';
 import 'core_providers.dart';
 
 /// 云端认证服务（注册/登录/登出/会话恢复，v3 云端化）。
@@ -83,4 +84,11 @@ final statsProvider = FutureProvider.family<
         periodType: key.periodType,
         offset: key.offset,
       );
+});
+
+/// 应用内更新（Android 专属；Web 刷新即最新）。
+final updateServiceProvider = Provider<UpdateService>((ref) {
+  final service = UpdateService();
+  ref.onDispose(service.dispose);
+  return service;
 });
