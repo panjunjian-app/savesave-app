@@ -26,6 +26,7 @@ part 'database.g.dart';
     Categories,
     LegacyDepositArchive,
     AiAnalysisReports,
+    SyncStates,
   ],
   daos: [
     UserDao,
@@ -47,6 +48,9 @@ class AppDatabase extends _$AppDatabase {
   /// (which runs after table creation/migration, so all target tables exist).
   /// Kept here instead of per-table `indexes` overrides because Drift 2.35
   /// replaced that API with non-repeatable class annotations.
+  ///
+  /// v5 adds per-table `updated_at` indexes for the sync dirty-scan
+  /// (`updated_at > last_push_at` 水位扫描，架构 §1.4).
   static const List<String> _indexStatements = <String>[
     'CREATE INDEX IF NOT EXISTS idx_goals_user_status '
         'ON savings_goals (user_id, status)',
@@ -61,10 +65,18 @@ class AppDatabase extends _$AppDatabase {
     'CREATE INDEX IF NOT EXISTS idx_ai_report_scope '
         'ON ai_analysis_reports '
         '(scope_period_type, scope_period_label, scope_ledger_key, created_at DESC)',
+    // ---- v5 同步索引 ----
+    'CREATE INDEX IF NOT EXISTS idx_bills_updated ON bills (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_ledgers_updated ON ledgers (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_goals_updated ON savings_goals (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_categories_updated ON categories (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_bindings_updated ON goal_ledger_bindings (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_milestones_updated ON goal_milestones (updated_at)',
+    'CREATE INDEX IF NOT EXISTS idx_reports_updated ON ai_analysis_reports (updated_at)',
   ];
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -80,6 +92,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 4) {
             await migrateV3ToV4(this, migrator);
+          }
+          if (from < 5) {
+            await migrateV4ToV5(this, migrator);
           }
         },
         beforeOpen: (details) async {

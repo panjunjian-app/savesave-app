@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/api_client.dart';
 import '../data/dao/analysis_report_dao.dart';
 import '../data/dao/balance_dao.dart';
 import '../data/dao/bill_dao.dart';
@@ -9,10 +10,12 @@ import '../data/dao/ledger_dao.dart';
 import '../data/dao/user_dao.dart';
 import '../data/database.dart';
 import '../data/services/ai_client.dart';
+import '../data/sync/sync_dao.dart';
 import '../domain/services/balance_service.dart';
 import '../domain/services/goal_accelerator.dart';
 import '../domain/services/key_store.dart';
 import '../domain/services/period_range_resolver.dart';
+import '../domain/services/token_store.dart';
 
 /// Database and stateless service wiring. Providers are the only place where
 /// infrastructure objects are constructed.
@@ -34,6 +37,19 @@ final balanceDaoProvider =
 final analysisReportDaoProvider = Provider<AnalysisReportDao>(
   (ref) => ref.watch(appDatabaseProvider).analysisReportDao,
 );
+
+// ---- v3 云同步装配 ----
+
+/// Token/会话安全存储（App: Keychain/Keystore；Web: localStorage 实现）。
+final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
+
+/// 云端 API 客户端（dio + JWT 注入 + 401 单飞刷新重放）。
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(tokenStore: ref.watch(tokenStoreProvider));
+});
+
+/// 同步数据访问层。
+final syncDaoProvider = Provider<SyncDao>((ref) => SyncDao(ref.watch(appDatabaseProvider)));
 
 final balanceCacheProvider = Provider<BalanceCache>((ref) => BalanceCache());
 

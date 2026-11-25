@@ -9,6 +9,7 @@ import '../../domain/models/savings_goal.dart';
 import '../../state/providers.dart';
 import '../common/empty_view.dart';
 import '../common/progress_ring.dart';
+import '../common/sync_status_badge.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -23,6 +24,7 @@ class HomePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('我的目标'),
         actions: <Widget>[
+          const SyncStatusBadge(),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: '设置',

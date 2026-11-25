@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -88,6 +90,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         return;
       }
       ref.read(currentUserProvider.notifier).state = user;
+      // 登录成功后：本机旧数据一次性迁移上云（可重试），随后增量同步。
+      // 不阻塞进入首页，失败由设置页可重试/手动同步。
+      unawaited(_postLoginSync());
       context.go('/home');
     } on AuthFailure catch (error) {
       if (mounted) {
@@ -101,6 +106,19 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       if (mounted) {
         setState(() => _busy = false);
       }
+    }
+  }
+
+  /// 登录后的迁移与首拉（架构 §6.4）：游客/本机旧账号数据升级上云 + 首拉。
+  Future<void> _postLoginSync() async {
+    try {
+      final migrator = ref.read(accountMigratorProvider);
+      if (await migrator.needsMigration()) {
+        await migrator.migrate();
+      }
+      await ref.read(syncServiceProvider).syncNow();
+    } catch (_) {
+      // 迁移/同步失败不阻塞使用：设置页「立即同步」可重试。
     }
   }
 
@@ -186,6 +204,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         icon: const Icon(Icons.person_outline),
                         label: const Text('暂不注册，以游客模式体验'),
                       ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => context.go('/upgrade-cloud'),
+                        child: const Text(
+                          '已有本机数据？升级为云端账号，开启多端同步',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       if (_error != null) ...<Widget>[
                         Text(
@@ -251,7 +279,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       onSubmitted: (_) => _submit(),
       decoration: InputDecoration(
         labelText: '密码',
-        hintText: _mode == _AuthMode.signUp ? '至少 6 位' : null,
+        hintText: _mode == _AuthMode.signUp ? '至少 8 位' : null,
         prefixIcon: const Icon(Icons.lock_outline),
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(

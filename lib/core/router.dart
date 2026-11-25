@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/analysis/analysis_report_page.dart';
 import '../features/auth/auth_page.dart';
+import '../features/auth/upgrade_cloud_page.dart';
 import '../features/bill/bill_detail_page.dart';
 import '../features/bill/bill_form_page.dart';
 import '../features/bill/bill_list_page.dart';
@@ -15,6 +16,7 @@ import '../features/ledger/ledger_list_page.dart';
 import '../features/settings/ai_config_page.dart';
 import '../features/settings/profile_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/settings/sync_settings_page.dart';
 import '../features/stats/stats_page.dart';
 import '../state/auth_providers.dart';
 
@@ -86,6 +88,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings/ai-config',
         builder: (context, state) => const AiConfigPage(),
+      ),
+      GoRoute(
+        path: '/settings/sync',
+        builder: (context, state) => const SyncSettingsPage(),
+      ),
+      GoRoute(
+        path: '/upgrade-cloud',
+        builder: (context, state) => const UpgradeCloudPage(),
       ),
       GoRoute(
         path: '/profile',

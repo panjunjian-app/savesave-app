@@ -7,12 +7,16 @@ import '../../domain/models/bill.dart' as model;
 part 'bill_dao.g.dart';
 
 /// Data access for bills. All range queries compare local calendar date strings.
+///
+/// v5 云同步：删除一律软删（is_deleted=1 + updated_at=now，架构 §1.4），
+/// 所有查询追加 isDeleted=false 过滤——软删行仅作为同步载体存在。
 @DriftAccessor(tables: [Bills])
 class BillDao extends DatabaseAccessor<AppDatabase> with _$BillDaoMixin {
   BillDao(super.attachedDatabase);
 
   Stream<List<model.Bill>> watchByLedger(String ledgerKey) {
     final query = select(bills);
+    query.where((row) => row.isDeleted.equals(false));
     if (ledgerKey != 'all') {
       query.where((row) => row.ledgerId.equals(ledgerKey));
     }
@@ -46,6 +50,7 @@ class BillDao extends DatabaseAccessor<AppDatabase> with _$BillDaoMixin {
 
   Future<List<model.Bill>> findRecent({int limit = 20}) async {
     final rows = await (select(bills)
+          ..where((row) => row.isDeleted.equals(false))
           ..orderBy([(row) => OrderingTerm.desc(row.createdAt)])
           ..limit(limit))
         .get();
@@ -53,7 +58,9 @@ class BillDao extends DatabaseAccessor<AppDatabase> with _$BillDaoMixin {
   }
 
   Future<model.Bill?> findById(String id) async {
-    final rows = await (select(bills)..where((row) => row.id.equals(id))).get();
+    final rows = await (select(bills)
+          ..where((row) => row.id.equals(id) & row.isDeleted.equals(false)))
+        .get();
     return rows.isEmpty ? null : _map(rows.first);
   }
 
@@ -77,8 +84,14 @@ class BillDao extends DatabaseAccessor<AppDatabase> with _$BillDaoMixin {
 
   Future<int> deleteAll() => delete(bills).go();
 
+  /// 软删：is_deleted=1 + updated_at=now，保证删除可同步传播（架构 §9.7）。
   Future<void> remove(String billId) async {
-    await (delete(bills)..where((row) => row.id.equals(billId))).go();
+    await (update(bills)..where((row) => row.id.equals(billId))).write(
+      BillsCompanion(
+        isDeleted: const Value(true),
+        updatedAt: Value(DateTime.now().toUtc().toIso8601String()),
+      ),
+    );
   }
 
   SimpleSelectStatement<Bills, Bill> _rangeQuery({
@@ -88,7 +101,7 @@ class BillDao extends DatabaseAccessor<AppDatabase> with _$BillDaoMixin {
   }) {
     return select(bills)
       ..where((row) {
-        final inRange = row.billDate.isBetweenValues(from, to);
+        final inRange = row.billDate.isBetweenValues(from, to) & row.isDeleted.equals(false);
         return ledgerKey == 'all' ? inRange : inRange & row.ledgerId.equals(ledgerKey);
       })
       ..orderBy([

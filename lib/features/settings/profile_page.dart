@@ -39,7 +39,12 @@ class ProfilePage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        user?.loginType == 'wechat' ? '微信用户' : '本地模式',
+                        // 账号类型：云端账号显示邮箱（多端同步），游客显示本地模式
+                        user?.loginType == 'email'
+                            ? (user?.email ?? '云端账号')
+                            : (user?.loginType == 'wechat'
+                                ? '微信用户'
+                                : '本地模式（游客，数据仅在本机）'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],

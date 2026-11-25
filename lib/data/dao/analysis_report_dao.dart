@@ -62,6 +62,8 @@ class AnalysisReportDao extends DatabaseAccessor<AppDatabase>
             reportJson: reportJson,
             dataVersion: dataVersion,
             createdAt: createdAt,
+            // v5：updatedAt 供脏数据扫描与 LWW 使用（记录不可变，仅标记可变）。
+            updatedAt: Value(createdAt),
             expiresAt: expiresAt,
             isStale: const Value(false),
             goalKey: Value(goalKey.isEmpty ? null : goalKey),
@@ -82,17 +84,26 @@ class AnalysisReportDao extends DatabaseAccessor<AppDatabase>
               row.scopePeriodType.equals(periodType) &
               row.scopePeriodLabel.equals(periodLabel) &
               row.scopeLedgerKey.equals(ledgerKey)))
-        .write(const AiAnalysisReportsCompanion(isStale: Value(true)));
+        .write(AiAnalysisReportsCompanion(
+      isStale: const Value(true),
+      // 标记变化也要进同步：updated_at 前推才能被脏扫描捕获。
+      updatedAt: Value(DateTime.now().toUtc().toIso8601String()),
+    ));
   }
 
   Future<int> markStaleForGoal(String goalKey) {
     return (update(aiAnalysisReports)..where((row) => row.goalKey.equals(goalKey)))
-        .write(const AiAnalysisReportsCompanion(isStale: Value(true)));
+        .write(AiAnalysisReportsCompanion(
+      isStale: const Value(true),
+      updatedAt: Value(DateTime.now().toUtc().toIso8601String()),
+    ));
   }
 
   Future<int> markAllStale() {
-    return update(aiAnalysisReports)
-        .write(const AiAnalysisReportsCompanion(isStale: Value(true)));
+    return update(aiAnalysisReports).write(AiAnalysisReportsCompanion(
+      isStale: const Value(true),
+      updatedAt: Value(DateTime.now().toUtc().toIso8601String()),
+    ));
   }
 
   /// Soft-expiry: reports older than [expiresAt] are flagged but never deleted.
@@ -100,7 +111,10 @@ class AnalysisReportDao extends DatabaseAccessor<AppDatabase>
     return (update(aiAnalysisReports)
           ..where((row) =>
               row.expiresAt.isSmallerThanValue(nowIso) & row.isStale.equals(false)))
-        .write(const AiAnalysisReportsCompanion(isStale: Value(true)));
+        .write(AiAnalysisReportsCompanion(
+      isStale: const Value(true),
+      updatedAt: Value(DateTime.now().toUtc().toIso8601String()),
+    ));
   }
 
   Future<int> deleteAll() => delete(aiAnalysisReports).go();
@@ -121,7 +135,8 @@ class AnalysisReportDao extends DatabaseAccessor<AppDatabase>
           row.scopePeriodType.equals(periodType) &
           row.scopePeriodLabel.equals(periodLabel) &
           row.scopeLedgerKey.equals(ledgerKey) &
-          row.isStale.equals(false))
+          row.isStale.equals(false) &
+          row.isDeleted.equals(false))
       ..orderBy([(row) => OrderingTerm.desc(row.createdAt)])
       ..limit(1);
   }

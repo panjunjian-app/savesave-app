@@ -1,0 +1,29 @@
+# Cloudflare Pages + D1 配置（省省钱，存存钱 · v3 云同步）
+#
+# 部署说明：
+# 1. `wrangler d1 create savesave-db` 后把 database_id 替换为真实值；
+# 2. 建表：`wrangler d1 execute savesave-db --remote --file=./schema/d1_schema.sql`；
+#    本地联调：`wrangler pages dev . --d1 DB=savesave-db`（自动用本地 SQLite 模拟）；
+# 3. JWT secret 不写进本文件（禁止把密钥提交进代码仓库）：
+#    `wrangler pages secret put JWT_SECRET --project-name <project>`
+#    本地 `wrangler pages dev` 会自动注入 `.env` 中的 JWT_SECRET（见 .env.example，
+#    .env 已加入 .gitignore，不得提交）。
+
+name = "savesave"
+compatibility_date = "2026-07-01"
+pages_build_output_dir = "build/web"
+
+# ---- D1 数据库绑定（云端权威副本） ----
+[[d1_databases]]
+binding = "DB"
+database_name = "savesave-db"
+database_id = "bb54b1af-d424-41ba-ab78-7557c13adfbd"
+
+# ---- 环境变量（非密钥） ----
+[vars]
+# 跨域白名单：App 端直连 Pages 默认域以外的来源时在此追加（同域 Web 请求无需 CORS）
+ALLOWED_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+
+# ---- 密钥（通过 secret 注入，勿写入本文件） ----
+# JWT_SECRET：JWT HMAC-SHA256 签名密钥，≥32 字节随机串
+# 声明方式：wrangler pages secret put JWT_SECRET

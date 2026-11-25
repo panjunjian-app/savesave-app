@@ -7,3 +7,4 @@ export 'core_providers.dart';
 export 'goal_providers.dart';
 export 'ledger_providers.dart';
 export 'service_providers.dart';
+export 'sync_providers.dart';

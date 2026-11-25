@@ -24,3 +24,10 @@ ios/*.mobileprovision
 ios/Runner/GoogleService-Info.plist
 
 # Keep lockfile and generated code in version control for reproducible builds.
+
+# Cloudflare local dev state (D1 本地副本)
+.wrangler/
+
+# 本地环境变量（JWT_SECRET 等，绝不提交）
+.env
+.env.local

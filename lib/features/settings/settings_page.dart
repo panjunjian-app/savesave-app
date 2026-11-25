@@ -80,6 +80,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: Column(
               children: <Widget>[
                 ListTile(
+                  leading: const Icon(Icons.sync, color: AppColors.primary),
+                  title: const Text('数据同步'),
+                  subtitle: const Text('云端账号、多端同步状态'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.go('/settings/sync'),
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.api, color: AppColors.primary),
                   title: const Text('AI 接口配置'),
                   subtitle: const Text('BYOK Key、连接测试与授权范围'),

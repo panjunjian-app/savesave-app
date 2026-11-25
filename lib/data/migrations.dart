@@ -9,10 +9,12 @@ import '../core/uuid.dart';
 import 'database.dart';
 
 /// Reads a nullable string from a raw query row.
-String? _readNullableString(QueryRow row, String column) {
-  final value = row.read<Object?>(column);
-  return value?.toString();
-}
+///
+/// 注意：Drift 2.35 的 `QueryRow.read` 需要可推断的 Dart 类型，
+/// `read<Object?>` 会抛「Could not find a matching SQL type for Object?」，
+/// 因此统一走带类型的 [QueryRow.readNullable]。
+String? _readNullableString(QueryRow row, String column) =>
+    row.readNullable<String>(column);
 
 /// Runs a raw SELECT and returns the resulting rows. Drift 2.35 removed the old
 /// `customQuery` helper, so all raw reads go through `customSelect(...).get()`.
@@ -234,6 +236,82 @@ Future<void> migrateV3ToV4(AppDatabase db, Migrator migrator) async {
     await db.customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email '
       'ON users (email) WHERE email IS NOT NULL',
+    );
+  });
+}
+
+/// v4 -> v5：云同步改造（架构 §6.1 / §7 T2）。
+///
+/// 内容：
+/// 1. 同步表补齐同步三件套列（is_deleted / updated_at / 复合主键表补 user_id），
+///    全部带默认值，幂等（PRAGMA 检查后才 ALTER）；
+/// 2. 新建 sync_states 水位表；
+/// 3. 存量数据回填：复合主键表的 user_id 从所属目标继承，
+///    无时间戳的表统一补 updated_at（ISO-8601 UTC，供 LWW 与脏扫描使用）。
+///
+/// 红线：只加列、只回填，不删除、不改写任何业务字段（兼容旧数据）。
+Future<void> migrateV4ToV5(AppDatabase db, Migrator migrator) async {
+  await db.transaction(() async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    // ---- 1) 幂等加列 ----
+    final additions = <String, List<String>>{
+      'ledgers': <String>['is_deleted'],
+      'bills': <String>['is_deleted'],
+      'savings_goals': <String>['is_deleted'],
+      'categories': <String>['updated_at', 'is_deleted'],
+      'goal_ledger_bindings': <String>['user_id', 'updated_at', 'is_deleted'],
+      'goal_milestones': <String>['user_id', 'updated_at', 'is_deleted'],
+      'legacy_deposit_archive': <String>['user_id'],
+      'ai_analysis_reports': <String>['updated_at', 'is_deleted'],
+    };
+    const columnDdl = <String, String>{
+      'is_deleted': 'INTEGER NOT NULL DEFAULT 0',
+      'updated_at': "TEXT NOT NULL DEFAULT ''",
+      'user_id': "TEXT NOT NULL DEFAULT ''",
+    };
+    for (final entry in additions.entries) {
+      for (final column in entry.value) {
+        if (!await _columnExists(db, entry.key, column)) {
+          await db.customStatement(
+            'ALTER TABLE ${entry.key} ADD COLUMN $column ${columnDdl[column]}',
+          );
+        }
+      }
+    }
+
+    // ---- 2) 水位表 ----
+    if (!await tableExists(db, 'sync_states')) {
+      await migrator.createTable(db.syncStates);
+    }
+
+    // ---- 3) 存量回填 ----
+    // 复合主键表 user_id 继承自所属目标（迁移后由 AccountMigrator 统一改写）。
+    await db.customStatement(
+      'UPDATE goal_ledger_bindings SET user_id = '
+      "(SELECT s.user_id FROM savings_goals s WHERE s.id = goal_ledger_bindings.goal_id) "
+      "WHERE user_id = '' AND goal_id IN (SELECT id FROM savings_goals)",
+    );
+    await db.customStatement(
+      'UPDATE goal_milestones SET user_id = '
+      "(SELECT s.user_id FROM savings_goals s WHERE s.id = goal_milestones.goal_id) "
+      "WHERE user_id = '' AND goal_id IN (SELECT id FROM savings_goals)",
+    );
+    // updated_at 回填：bindings 用 created_at；其余无时间戳表统一用迁移时刻。
+    await db.customStatement(
+      "UPDATE goal_ledger_bindings SET updated_at = created_at WHERE updated_at = ''",
+    );
+    await db.customStatement(
+      "UPDATE goal_milestones SET updated_at = ? WHERE updated_at = ''",
+      <Object?>[nowIso],
+    );
+    await db.customStatement(
+      "UPDATE categories SET updated_at = ? WHERE updated_at = ''",
+      <Object?>[nowIso],
+    );
+    await db.customStatement(
+      'UPDATE ai_analysis_reports SET updated_at = created_at WHERE updated_at = ?',
+      <Object?>[''],
     );
   });
 }
