@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/services/ai_client.dart';
 import 'core_providers.dart';
 
 abstract final class AiPrefsKeys {
@@ -34,6 +33,6 @@ final dataRevisionProvider = StateProvider<int>((ref) => 0);
 
 final aiConnectionTestProvider = FutureProvider<bool>((ref) async {
   final client = ref.watch(aiClientProvider);
-  final result = await client.testConnection();
-  return result == ConnectionResult.success;
+  final probe = await client.testConnection();
+  return probe.ok;
 });

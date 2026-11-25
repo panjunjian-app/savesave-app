@@ -71,20 +71,21 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
       _message = null;
     });
     try {
-      final result = await ref.read(aiClientProvider).testConnection();
+      final probe = await ref.read(aiClientProvider).testConnection();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(
-        AiPrefsKeys.keyVerified,
-        result == ConnectionResult.success,
-      );
+      await prefs.setBool(AiPrefsKeys.keyVerified, probe.ok);
       if (mounted) {
         setState(() {
-          _verified = result == ConnectionResult.success;
-          _message = switch (result) {
-            ConnectionResult.success => '连接成功，AI 功能已启用',
-            ConnectionResult.invalidKeyOrQuota => 'Key 无效或额度不足，请检查后重试',
-            ConnectionResult.networkError => '网络异常，请稍后重试',
-          };
+          _verified = probe.ok;
+          _message = probe.ok
+              ? '连接成功，AI 功能已启用'
+              // 优先展示上游具体原因（含智谱错误码），便于用户定位是
+              // Key 问题、欠费、模型下线还是限流。
+              : (probe.detail ?? switch (probe.result) {
+                  ConnectionResult.success => '连接成功，AI 功能已启用',
+                  ConnectionResult.invalidKeyOrQuota => 'Key 无效或额度不足，请检查后重试',
+                  ConnectionResult.networkError => '网络异常，请稍后重试',
+                });
         });
         ref.invalidate(aiAvailabilityProvider);
       }

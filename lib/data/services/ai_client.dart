@@ -15,6 +15,22 @@ export 'ai_failures.dart';
 /// Connection states of the three-state test-connection flow.
 enum ConnectionResult { success, invalidKeyOrQuota, networkError }
 
+/// 「测试连接」的完整结果：状态 + 可直接展示给用户的具体原因。
+///
+/// 之所以单独带 [detail]：智谱把不同问题都塞进 401/429，例如
+/// `1003` Key 过期、`1113` 账户欠费、`1211` 模型不存在、`1302` 限流，
+/// 若只笼统提示「Key 无效或额度不足」，用户根本无法定位。
+class ConnectionProbe {
+  const ConnectionProbe(this.result, [this.detail]);
+
+  final ConnectionResult result;
+
+  /// 具体原因（含上游业务错误码）；成功时为 null。
+  final String? detail;
+
+  bool get ok => result == ConnectionResult.success;
+}
+
 /// Raw field-level bill extraction. Amounts are converted to cents immediately.
 class BillDraftExtract {
   const BillDraftExtract({
@@ -336,7 +352,7 @@ class AiClient {
   final AuthStrategy _auth;
 
   /// Smallest possible text request: no image, 8 output tokens.
-  Future<ConnectionResult> testConnection() async {
+  Future<ConnectionProbe> testConnection() async {
     try {
       await _chat(
         body: <String, dynamic>{
@@ -349,13 +365,13 @@ class AiClient {
         },
         token: CancelToken(),
       );
-      return ConnectionResult.success;
-    } on AiAuthFailure {
-      return ConnectionResult.invalidKeyOrQuota;
-    } on AiQuotaFailure {
-      return ConnectionResult.invalidKeyOrQuota;
-    } on AiFailure {
-      return ConnectionResult.networkError;
+      return const ConnectionProbe(ConnectionResult.success);
+    } on AiAuthFailure catch (error) {
+      return ConnectionProbe(ConnectionResult.invalidKeyOrQuota, error.message);
+    } on AiQuotaFailure catch (error) {
+      return ConnectionProbe(ConnectionResult.invalidKeyOrQuota, error.message);
+    } on AiFailure catch (error) {
+      return ConnectionProbe(ConnectionResult.networkError, error.message);
     }
   }
 
@@ -502,6 +518,48 @@ class AiClient {
       throw const AiTimeoutFailure();
     }
     final status = error.response?.statusCode;
+    final data = error.response?.data;
+    final upstream = _describeUpstreamError(data);
+
+    // 智谱（BigModel）业务错误码优先：HTTP 状态同是 401/429，含义完全不同。
+    if (upstream != null) {
+      switch (upstream.code) {
+        case '1001':
+        case '1002':
+        case '1003':
+        case '1004':
+        case '1005':
+          throw AiAuthFailure(
+            'API Key 无效或已过期（错误码 ${upstream.code}）。'
+            '请到 open.bigmodel.cn → API Keys 重新生成「标准 API Key」再填入。',
+          );
+        case '1112':
+        case '1113':
+          throw AiQuotaFailure(
+            '智谱账户欠费/余额不足（错误码 ${upstream.code}）：${upstream.message}。'
+            '免费模型（如 glm-4.6v-flash）虽不计费，但账户处于欠费状态时同样会被拒绝，'
+            '请到智谱控制台「财务总览」检查余额与赠送额度是否过期。',
+          );
+        case '1211':
+          throw const AiAuthFailure(
+            '模型不存在（错误码 1211）：${AiConfig.modelId} 当前不可用，'
+            '请到智谱控制台确认该模型是否已下线。',
+          );
+        case '1302':
+        case '1305':
+        case '1308':
+        case '1310':
+          throw AiQuotaFailure(
+            '智谱侧限制（错误码 ${upstream.code}）：${upstream.message}。'
+            '免费模型有并发/频率上限，请稍等 1 分钟再试。',
+          );
+        default:
+          throw AiNetworkFailure(
+            '模型服务返回错误（错误码 ${upstream.code}）：${upstream.message}',
+          );
+      }
+    }
+
     if (status == 401 || status == 403) {
       throw const AiAuthFailure();
     }
@@ -512,7 +570,6 @@ class AiClient {
       throw const AiNetworkFailure();
     }
 
-    final data = error.response?.data;
     final text = (data is Map ? jsonEncode(data) : data?.toString() ?? '').toLowerCase();
     const quotaHints = <String>['quota', 'insufficient balance', '余额', '额度'];
     const authHints = <String>['invalid key', 'unauthorized', 'invalid api key'];
@@ -523,6 +580,30 @@ class AiClient {
       throw const AiAuthFailure();
     }
     throw const AiNetworkFailure();
+  }
+
+  /// 解析上游业务错误体：`{"error":{"code":"1113","message":"余额不足..."}}`。
+  ///
+  /// 智谱的错误码可能是字符串也可能是数字，这里统一转字符串；
+  /// 无法识别时返回 null，交由 HTTP 状态码兜底。
+  _UpstreamError? _describeUpstreamError(Object? data) {
+    if (data is! Map) {
+      return null;
+    }
+    final error = data['error'];
+    if (error is! Map) {
+      return null;
+    }
+    final rawCode = error['code'];
+    final code = rawCode == null ? '' : rawCode.toString().trim();
+    if (code.isEmpty) {
+      return null;
+    }
+    final rawMessage = error['message'];
+    final message = rawMessage is String && rawMessage.trim().isNotEmpty
+        ? rawMessage.trim()
+        : '无附加说明';
+    return _UpstreamError(code, message);
   }
 
   String _extractContent(Map<String, dynamic> response) {
@@ -663,4 +744,12 @@ unnecessaryItems.itemKey 必须来自输入 topExpenses[].itemKey；不得杜撰
 无内容返回空数组或空字符串。goal.strategy=buildPositive 时不做达标承诺；
 goal.strategy=generic 时 goalComment 返回空字符串并改写 noGoalSuggestion。
 ''';
+}
+
+/// 上游返回的业务错误（智谱用 HTTP 401/429 + 业务码组合表达多种原因）。
+class _UpstreamError {
+  const _UpstreamError(this.code, this.message);
+
+  final String code;
+  final String message;
 }
