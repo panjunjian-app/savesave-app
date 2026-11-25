@@ -21,8 +21,11 @@ export const onRequest = async (context: FunctionContext): Promise<Response> => 
     return preflightResponse(cors);
   }
 
-  // 2) 免鉴权路由：健康检查与认证
-  const isExempt = path === '/api/health' || path.startsWith('/api/auth/');
+  // 2) 免鉴权路由：健康检查、认证、以及 BYOK 的 AI 代理
+  //    （AI 为自带 Key 能力，游客模式也要能用；该路径自身按 IP 限流）
+  const isExempt = path === '/api/health'
+    || path.startsWith('/api/auth/')
+    || path.startsWith('/api/ai/');
   if (!isExempt) {
     const authHeader = request.headers.get('Authorization') ?? '';
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';

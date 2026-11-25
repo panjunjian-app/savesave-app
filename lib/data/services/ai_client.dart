@@ -321,7 +321,7 @@ class AiClient {
         _dio = dio ??
             Dio(
               BaseOptions(
-                baseUrl: AiConfig.endpoint,
+                baseUrl: AiConfig.resolvedEndpoint,
                 connectTimeout: AiConfig.timeout,
                 sendTimeout: AiConfig.timeout,
                 receiveTimeout: AiConfig.timeout,

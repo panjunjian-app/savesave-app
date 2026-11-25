@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// Application-wide configuration placeholders.
 ///
 /// All third-party identifiers are intentionally kept as placeholders.
@@ -29,7 +31,22 @@ class AppConfig {
 class AiConfig {
   const AiConfig._();
 
+  /// 智谱官方端点（手机 App 原生 HTTP 直连使用）。
   static const String endpoint = 'https://open.bigmodel.cn/api/paas/v4';
+
+  /// Web 端实际使用的基地址。
+  ///
+  /// 智谱接口不返回 `Access-Control-Allow-Origin`，浏览器直连会在预检阶段
+  /// 被拦截（表现为「网络异常，请稍后重试」）。因此 Web 端改走同域代理
+  /// `https://<当前站点>/api/ai`（Cloudflare Pages Functions 转发到智谱，
+  /// 不落库、不记录 Key）。App 端仍直连，不经过任何中转。
+  static String get resolvedEndpoint {
+    if (!kIsWeb) {
+      return endpoint;
+    }
+    return '${Uri.base.origin}/api/ai';
+  }
+
   static const String chatCompletionsPath = '/chat/completions';
   static const String modelId = 'glm-4.6v-flash';
   static const Duration timeout = Duration(seconds: 15);
