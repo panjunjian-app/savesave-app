@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/breakpoints.dart';
+import '../../core/layout_tokens.dart';
 import '../../core/theme.dart';
 import '../../domain/models/user.dart';
 import '../../domain/services/auth_service.dart';
@@ -390,13 +391,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             const SizedBox(height: 20),
             _buildSubmitButton(centered: true),
             const SizedBox(height: 12),
-            // 桌面档按钮宽度上限 240（PRD §4.1 / 验收 A4）。
+            // 桌面档按钮宽度上限 240（PRD §4.1 / 验收 A4）；
+            // 长文案在 240 内用 13px 排下，避免被 ellipsis 截断（QA P2-4）。
             Center(
               child: SizedBox(
-                width: 240,
+                width: AppLayout.buttonMaxWidth,
                 child: AppButton.secondary(
                   label: '暂不注册，以游客模式体验',
                   icon: Icons.person_outline,
+                  textStyle: const TextStyle(fontSize: 13),
                   onPressed: _busy ? null : _signInAsGuest,
                 ),
               ),
@@ -507,7 +510,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     if (!centered) {
       return button;
     }
-    return Center(child: SizedBox(width: 240, child: button));
+    return Center(
+      child: SizedBox(width: AppLayout.buttonMaxWidth, child: button),
+    );
   }
 
   Widget _buildAgreementRow() {

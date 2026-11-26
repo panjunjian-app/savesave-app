@@ -174,12 +174,14 @@ class _BillListPageState extends ConsumerState<BillListPage> {
       for (final Category category in categories) category.id: category,
     };
     final List<Bill> filtered = _applyFilters(bills, categoryById);
+    final EdgeInsets pagePad = context.pagePadding;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(32, 20, 32, 12),
+          // 工具条与表格使用同一水平内距（QA P2-2：避免表头/行顶到内容区边缘）。
+          padding: EdgeInsets.fromLTRB(pagePad.left, 20, pagePad.right, 12),
           child: Row(
             children: <Widget>[
               SizedBox(
@@ -264,78 +266,81 @@ class _BillListPageState extends ConsumerState<BillListPage> {
           ),
         ),
         Expanded(
-          child: AppTableView<Bill>(
-            rows: filtered,
-            emptyHint: '没有符合条件的账单',
-            onRowTap: (bill) => context.go('/bills/${bill.id}'),
-            columns: <AppTableColumn<Bill>>[
-              AppTableColumn<Bill>(
-                label: '日期',
-                flex: 2,
-                minWidth: 96,
-                cell: (context, bill) => Text(bill.billDate),
-              ),
-              AppTableColumn<Bill>(
-                label: '分类',
-                flex: 2,
-                minWidth: 96,
-                cell: (context, bill) {
-                  final category = categoryById[bill.categoryId];
-                  if (category == null) {
-                    return const Text('—');
-                  }
-                  return Text(
-                    '${category.icon} ${category.name}',
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: pagePad.left),
+            child: AppTableView<Bill>(
+              rows: filtered,
+              emptyHint: '没有符合条件的账单',
+              onRowTap: (bill) => context.go('/bills/${bill.id}'),
+              columns: <AppTableColumn<Bill>>[
+                AppTableColumn<Bill>(
+                  label: '日期',
+                  flex: 2,
+                  minWidth: 96,
+                  cell: (context, bill) => Text(bill.billDate),
+                ),
+                AppTableColumn<Bill>(
+                  label: '分类',
+                  flex: 2,
+                  minWidth: 96,
+                  cell: (context, bill) {
+                    final category = categoryById[bill.categoryId];
+                    if (category == null) {
+                      return const Text('—');
+                    }
+                    return Text(
+                      '${category.icon} ${category.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
+                AppTableColumn<Bill>(
+                  label: '备注',
+                  flex: 3,
+                  minWidth: 140,
+                  cell: (context, bill) => Text(
+                    bill.note ?? (bill.isIncome ? '收入' : '支出'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  );
-                },
-              ),
-              AppTableColumn<Bill>(
-                label: '备注',
-                flex: 3,
-                minWidth: 140,
-                cell: (context, bill) => Text(
-                  bill.note ?? (bill.isIncome ? '收入' : '支出'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              AppTableColumn<Bill>(
-                label: '账本',
-                flex: 2,
-                minWidth: 100,
-                cell: (context, bill) => Text(
-                  ledgerNames[bill.ledgerId] ?? '—',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              AppTableColumn<Bill>(
-                label: '金额',
-                flex: 2,
-                minWidth: 120,
-                numeric: true,
-                align: TextAlign.right,
-                cell: (context, bill) => Text(
-                  '${bill.isIncome ? '+' : '-'}${Money.formatCents(bill.amountCents)}',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: bill.isIncome ? AppColors.primary : AppColors.danger,
                   ),
                 ),
-              ),
-              AppTableColumn<Bill>(
-                label: '操作',
-                flex: 1,
-                minWidth: 88,
-                align: TextAlign.right,
-                cell: (context, bill) => TextButton(
-                  onPressed: () => context.go('/bills/${bill.id}'),
-                  child: const Text('查看'),
+                AppTableColumn<Bill>(
+                  label: '账本',
+                  flex: 2,
+                  minWidth: 100,
+                  cell: (context, bill) => Text(
+                    ledgerNames[bill.ledgerId] ?? '—',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+                AppTableColumn<Bill>(
+                  label: '金额',
+                  flex: 2,
+                  minWidth: 120,
+                  numeric: true,
+                  align: TextAlign.right,
+                  cell: (context, bill) => Text(
+                    '${bill.isIncome ? '+' : '-'}${Money.formatCents(bill.amountCents)}',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: bill.isIncome ? AppColors.primary : AppColors.danger,
+                    ),
+                  ),
+                ),
+                AppTableColumn<Bill>(
+                  label: '操作',
+                  flex: 1,
+                  minWidth: 88,
+                  align: TextAlign.right,
+                  cell: (context, bill) => TextButton(
+                    onPressed: () => context.go('/bills/${bill.id}'),
+                    child: const Text('查看'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

@@ -36,6 +36,7 @@ abstract final class AppButton {
     VoidCallback? onPressed,
     IconData? icon,
     bool busy = false,
+    TextStyle? textStyle,
   }) {
     return _AppButton(
       kind: _AppButtonKind.secondary,
@@ -43,6 +44,7 @@ abstract final class AppButton {
       onPressed: onPressed,
       icon: icon,
       busy: busy,
+      textStyle: textStyle,
     );
   }
 
@@ -101,7 +103,8 @@ class _AppButton extends StatelessWidget {
   /// 主按钮的自定义底色（例如「有新版」转金色），其余类型忽略。
   final Color? backgroundColor;
 
-  /// 文字按钮的字号覆写（用于保持改造前 13px 的次要链接观感）。
+  /// 字号覆写（文字按钮 / 次级按钮）：用于保持改造前 13px 的次要链接观感，
+  /// 以及在 240px 上限内放长文案（QA P2-4）。
   final TextStyle? textStyle;
 
   @override
@@ -123,7 +126,14 @@ class _AppButton extends StatelessWidget {
         );
         break;
       case _AppButtonKind.secondary:
-        button = OutlinedButton(onPressed: handler, child: content);
+        final TextStyle? style = textStyle;
+        button = OutlinedButton(
+          onPressed: handler,
+          style: style == null
+              ? null
+              : OutlinedButton.styleFrom(textStyle: style),
+          child: content,
+        );
         break;
       case _AppButtonKind.text:
         final TextStyle? style = textStyle;

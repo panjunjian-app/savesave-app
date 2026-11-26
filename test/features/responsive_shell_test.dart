@@ -9,6 +9,7 @@ import 'package:savesave/features/common/app_shell.dart';
 import 'package:savesave/features/common/data_table_view.dart';
 import 'package:savesave/features/common/responsive_scaffold.dart';
 import 'package:savesave/features/common/side_nav.dart';
+import 'package:savesave/features/settings/profile_page.dart';
 
 /// 响应式导航壳冒烟测试（架构 §10.1 建议项，**新增**测试，不改动既有 129 例）。
 ///
@@ -167,6 +168,49 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     addTearDown(tester.view.reset);
+  });
+
+  testWidgets('1920×1080：顶栏标题左边界与内容区左边界对齐（P2-3）', (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _wrap(const AppShell(location: '/home', child: _ProbePage())),
+    );
+    await tester.pumpAndSettle();
+
+    final double titleX = tester.getTopLeft(find.text('探针页面')).dx;
+    // 内容卡片 = 内容区限宽容器内的第一块 ColoredBox（必须从 ListView 里找，
+    // 否则会命中窗口级背景 ColoredBox，坐标恒为 0）。
+    final Finder contentCard = find
+        .descendant(of: find.byType(ListView), matching: find.byType(ColoredBox))
+        .first;
+    final double contentX = tester.getTopLeft(contentCard).dx;
+    // 标题与内容卡片左边界对齐（容差 2px：标题文本可能有字体留白）。
+    expect((titleX - contentX).abs(), lessThanOrEqualTo(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('我的页桌面：退出登录按钮锁在 240，不被 stretch 列撑满（P1）', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _wrap(const AppShell(location: '/profile', child: ProfilePage())),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder signOut = find.widgetWithText(OutlinedButton, '退出登录');
+    expect(signOut, findsOneWidget);
+    expect(
+      tester.getSize(signOut).width,
+      lessThanOrEqualTo(AppLayout.buttonMaxWidth),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   test('断点与导航映射口径', () {

@@ -157,6 +157,9 @@ class SyncDao {
   /// - 服务端 updatedAt 较新 → 覆盖本地（保留本地已有 user_id）；
   /// - 本地较新 → 保留本地（本地行本就处于脏状态，将被回推）。
   /// 软删行同样按上述规则落库，删除随 isDeleted 传播。
+  ///
+  /// 只要本批真正落库了 >=1 行，就主动分发一次该表的 Drift 流更新通知
+  /// （见 [_notifyTableUpdated]），保证已建立的 `watch*` 订阅立即重新查询。
   Future<int> applyServerRows(
     String tableKey,
     List<Map<String, dynamic>> rows,
@@ -175,7 +178,57 @@ class SyncDao {
       await _upsertServerRow(tableKey, row, cloudUid);
       applied++;
     }
+    if (applied > 0) {
+      _notifyTableUpdated(tableKey);
+    }
     return applied;
+  }
+
+  // ============ 流更新通知（原生 SQL 通道的补偿） ============
+
+  /// 表键 → Drift 表元数据；未知表返回 null（不通知）。
+  TableInfo? _tableInfoFor(String tableKey) {
+    switch (tableKey) {
+      case 'ledgers':
+        return _db.ledgers;
+      case 'bills':
+        return _db.bills;
+      case 'categories':
+        return _db.categories;
+      case 'savingsGoals':
+        return _db.savingsGoals;
+      case 'goalLedgerBindings':
+        return _db.goalLedgerBindings;
+      case 'goalMilestones':
+        return _db.goalMilestones;
+      case 'aiAnalysisReports':
+        return _db.aiAnalysisReports;
+      default:
+        return null;
+    }
+  }
+
+  /// 主动告知 Drift「这张表的数据被改写了」，让所有监听它的流重新查询。
+  ///
+  /// 为什么必须手动通知：pull 落库走的是 [DatabaseConnectionUser.customStatement]
+  /// 原生 SQL 通道，Drift 官方明确该通道**不会**触发流更新（见
+  /// `customStatement` 文档：「This method does not update stream queries ...
+  /// You can also call markTablesUpdated manually」）。缺少这步补偿时：
+  /// 首屏 `ledgersProvider / billsProvider / goalsProvider` 在 pull 之前就已订阅，
+  /// 库里已有数据但流不刷新 → 页面长期停在空态，而同步徽标显示「已同步」。
+  ///
+  /// 安全性：
+  /// - 仅在事务内由 Drift 缓冲、提交后统一派发（`transactions.dart` 的
+  ///   `TransactionStreamQueryStore`），不会读到未提交数据；
+  /// - 只通知 7 张业务表，`sync_states`（水位）不在其中，因此「写水位 →
+  ///   触发同步 → 再写水位」的循环不会发生；且调用点带 `applied > 0` 守卫，
+  ///   增量拉取拿到 0 行时不会引发任何额外同步。
+  void _notifyTableUpdated(String tableKey) {
+    final TableInfo? table = _tableInfoFor(tableKey);
+    if (table == null) {
+      return;
+    }
+    _db.markTablesUpdated(<TableInfo>[table]);
   }
 
   /// 读取本地现有行的 updated_at（复合主键按表区分）。无行返回 null。
@@ -399,6 +452,9 @@ class SyncDao {
   ///
   /// 覆盖 5 张带 user_id 的表（bills/ai_analysis_reports 本地无该列，
   /// 服务端按 JWT 盖章，无需重写）；同时回填缺失的 updated_at。
+  ///
+  /// 事务提交后主动通知这 5 张表的流重新查询：迁移会改写 `updated_at`，
+  /// 若不同步刷新，设置页/首页可能展示迁移前的旧快照。
   Future<void> rewriteOwnership(String cloudUid) async {
     final now = isoNowMs();
     await _db.transaction(() async {
@@ -431,6 +487,14 @@ class SyncDao {
         <Object?>[cloudUid, cloudUid],
       );
     });
+    // 事务已提交：这 5 张业务表的归属/时间戳发生了变化，通知流重新查询。
+    _db.markTablesUpdated(<TableInfo>[
+      _db.ledgers,
+      _db.savingsGoals,
+      _db.categories,
+      _db.goalLedgerBindings,
+      _db.goalMilestones,
+    ]);
   }
 
   /// 校验归属重写是否完整：返回仍不属于 cloudUid 的行数（应为 0）。

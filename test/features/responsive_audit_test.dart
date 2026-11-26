@@ -215,9 +215,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    // 已知缺陷登记（P2，见 QA 报告问题 3）：子项数少于列数时尾部补空占位列，
-    // 两列卡片只占内容区 2/3，右侧留 1/3 空白，表现为「两列偏窄 + 右侧留白多」。
-    // 修复方向：`columns = min(columns, children.length)`（或按子项数自适应）。
+    // 已修复（P2-1）：子项数少于列数时按子项数收列，尾部不再补空占位列。
     testWidgets(
       '两个子项在 1135 宽下应铺满整行（PRD §4.3 期望）',
       (tester) async {
@@ -248,7 +246,6 @@ void main() {
           expect(width, greaterThan(500));
         }
       },
-      skip: true, // 待修复：AdaptiveGrid 尾部空占位列（P2），修复后去掉 skip
     );
   });
 

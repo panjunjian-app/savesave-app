@@ -123,13 +123,19 @@ class ResponsiveScaffold extends StatelessWidget {
     );
   }
 
+  /// 桌面档顶栏：标题与动作按钮都放进与内容区同宽居中的容器里，
+  /// 保证超宽视口下标题左边界与内容卡片对齐（QA P2-3）。
+  ///
+  /// 实现要点：不使用 `AppBar.actions`（那样标题区宽度会被 actions 挤掉、
+  /// 无法对齐内容区），改为把动作按钮放进 `title` 的行内，`titleSpacing: 0`
+  /// 让标题区吃满整条 AppBar 宽度。
   AppBar _buildDesktopAppBar(
     BuildContext context,
     AppBreakpoint breakpoint,
   ) {
     final String headerTitle = breadcrumb ?? title;
-    final double titleSpacing = breakpoint == AppBreakpoint.medium ? 24 : 32;
     final double titleFontSize = breakpoint == AppBreakpoint.medium ? 20 : 22;
+    final EdgeInsets pagePad = AppLayout.pagePadding(breakpoint);
     final String? back = backLocation;
     final Widget? primary = primaryAction;
     final Future<void> Function()? refresh = onRefresh;
@@ -138,44 +144,51 @@ class ResponsiveScaffold extends StatelessWidget {
       centerTitle: false,
       automaticallyImplyLeading: false,
       toolbarHeight: AppLayout.topBarHeight,
-      titleSpacing: titleSpacing,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (back != null)
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: '返回',
-              onPressed: () => context.go(back),
-            ),
-          Flexible(
-            child: Text(
-              headerTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: titleFontSize,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
+      titleSpacing: 0,
+      title: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: pagePad.left),
+            child: Row(
+              children: <Widget>[
+                if (back != null) ...<Widget>[
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: '返回',
+                    onPressed: () => context.go(back),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(
+                    headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: titleFontSize,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (primary != null) ...<Widget>[
+                  primary,
+                  const SizedBox(width: AppLayout.blockGap),
+                ],
+                if (refresh != null)
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: '刷新',
+                    onPressed: () => refresh(),
+                  ),
+                ...actions,
+                const SizedBox(width: 8),
+              ],
             ),
           ),
-        ],
+        ),
       ),
-      actions: <Widget>[
-        if (primary != null) ...<Widget>[
-          primary,
-          const SizedBox(width: AppLayout.blockGap),
-        ],
-        if (refresh != null)
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '刷新',
-            onPressed: () => refresh(),
-          ),
-        ...actions,
-        const SizedBox(width: 8),
-      ],
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
         child: Divider(height: 1, thickness: 1, color: AppColors.divider),

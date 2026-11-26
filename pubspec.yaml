@@ -1,7 +1,7 @@
 name: savesave
 description: "省省钱，存存钱 - 本地优先的记账与储蓄目标管理 App"
 publish_to: "none"
-version: 1.3.0+4
+version: 1.3.1+5
 
 environment:
   sdk: ">=3.13.0 <4.0.0"

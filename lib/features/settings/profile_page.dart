@@ -70,12 +70,17 @@ class ProfilePage extends ConsumerWidget {
                     desktop: true,
                   ),
                   const SizedBox(height: AppLayout.cardGap),
-                  SizedBox(
-                    width: 240,
-                    child: AppButton.secondary(
-                      label: '退出登录',
-                      icon: Icons.logout,
-                      onPressed: () => _signOut(context, ref),
+                  // 桌面档按钮上限 240（QA P1）：stretch 列会给子级 tight 宽度，
+                  // 必须用 Align 松开约束，否则 SizedBox.width 会被父级吞掉变成全宽。
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: AppLayout.buttonMaxWidth,
+                      child: AppButton.secondary(
+                        label: '退出登录',
+                        icon: Icons.logout,
+                        onPressed: () => _signOut(context, ref),
+                      ),
                     ),
                   ),
                 ],

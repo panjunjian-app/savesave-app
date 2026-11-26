@@ -55,11 +55,16 @@ class AdaptiveGrid extends StatelessWidget {
     final double rowGap = runSpacing ?? spacing;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final int columns = columnsFor(
+        // 子项数少于列数时按子项数收列，避免尾部补空占位列把卡片压窄、
+        // 右侧留出一整列空白（QA P2-1）。
+        final int rawColumns = columnsFor(
           constraints.maxWidth,
           minItemWidth: minItemWidth,
           maxColumns: maxColumns,
         );
+        final int columns = rawColumns > children.length
+            ? children.length.clamp(1, maxColumns)
+            : rawColumns;
         if (columns <= 1) {
           final List<Widget> stacked = <Widget>[];
           for (int i = 0; i < children.length; i++) {
@@ -84,7 +89,7 @@ class AdaptiveGrid extends StatelessWidget {
             }
             cells.add(Expanded(child: children[i]));
           }
-          // 末行不足列数时用空占位补齐，保证各列宽度一致。
+          // 多行场景下末行不足列数时补空占位，保证各行卡片等宽。
           for (int i = end - start; i < columns; i++) {
             cells.add(SizedBox(width: spacing));
             cells.add(const Expanded(child: SizedBox.shrink()));
