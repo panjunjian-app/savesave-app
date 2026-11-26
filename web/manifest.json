@@ -1,12 +1,13 @@
 {
-    "name": "savesave",
-    "short_name": "savesave",
+    "name": "省省钱，存存钱",
+    "short_name": "省省钱",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F7F3EA",
+    "theme_color": "#1F6F5C",
+    "description": "记账、省钱、存钱——把每一笔记下来，把每一分攒起来。",
+    "lang": "zh-CN",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../../domain/models/user.dart';
 import '../../domain/services/auth_service.dart';
 import '../../state/providers.dart';
+import '../common/app_logo.dart';
 import '../common/app_buttons.dart';
 
 enum _AuthMode { signIn, signUp }
@@ -189,11 +190,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Icon(
-                  Icons.savings_outlined,
-                  size: 88,
-                  color: AppColors.primary,
-                ),
+                const Center(child: AppLogoMark(size: 88)),
                 const SizedBox(height: 20),
                 Text(
                   '省省钱，存存钱',
@@ -304,10 +301,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Icon(
-                Icons.savings_outlined,
-                size: 64,
-                color: Colors.white,
+              const AppLogoMark(
+                size: 72,
+                surfaceColor: AppColors.primaryDark,
               ),
               const SizedBox(height: 24),
               const Text(

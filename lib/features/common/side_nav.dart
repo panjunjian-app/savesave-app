@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/layout_tokens.dart';
+import 'app_logo.dart';
 import '../../core/theme.dart';
 // 导航项常量的唯一来源在 app_shell.dart（Shared Knowledge §7）。
 import 'app_shell.dart';
@@ -59,27 +60,15 @@ class _BrandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return const SizedBox(
       height: AppLayout.brandBarHeight,
       child: Padding(
-        padding: const EdgeInsets.only(left: 20, right: 12),
+        padding: EdgeInsets.only(left: 20, right: 12),
         child: Row(
           children: <Widget>[
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.09),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.savings_outlined,
-                size: 19,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
+            AppLogoMark(size: 32),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 '省省钱，存存钱',
                 maxLines: 1,
