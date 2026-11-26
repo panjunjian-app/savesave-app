@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/breakpoints.dart';
+import '../../core/layout_tokens.dart';
 import '../../core/theme.dart';
 import '../../data/services/ai_client.dart';
 import '../../state/providers.dart';
+import '../common/app_buttons.dart';
+import '../common/responsive_scaffold.dart';
 
 class AiConfigPage extends ConsumerStatefulWidget {
   const AiConfigPage({super.key});
@@ -135,20 +139,11 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
         final reason = probe.retryable
             ? '$detail（已自动重试 $maxAttempts 次仍未成功）'
             : detail;
-        if (attempt > 1 || probe.retryable) {
-          // 记录重试过程，便于用户知道系统确实努力过
-          setState(() {
-            _verified = false;
-            _testing = false;
-            _message = reason;
-          });
-        } else {
-          setState(() {
-            _verified = false;
-            _testing = false;
-            _message = reason;
-          });
-        }
+        setState(() {
+          _verified = false;
+          _testing = false;
+          _message = reason;
+        });
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(AiPrefsKeys.keyVerified, false);
         ref.invalidate(aiAvailabilityProvider);
@@ -221,112 +216,274 @@ class _AiConfigPageState extends ConsumerState<AiConfigPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('AI 接口配置')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                '本 App 采用 BYOK（自带 Key）模式。Key 仅保存在系统安全存储中，'
-                '不会上传到任何第三方服务器；只有你主动使用 AI 功能时，'
-                '脱敏后的数据才会发送到你配置的模型服务。',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-            ),
+    return ResponsiveScaffold(
+      title: 'AI 接口配置',
+      maxWidth: AppLayout.formTwoColumnMaxWidth,
+      backLocation: '/settings',
+      body: context.isCompact ? _buildCompactBody() : _buildDesktopBody(),
+    );
+  }
+
+  /// 手机端：与改造前逐字一致的列表结构。
+  Widget _buildCompactBody() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        _introCard(),
+        const SizedBox(height: 12),
+        _keyField(),
+        const SizedBox(height: 12),
+        if (_masked.isNotEmpty)
+          Text(
+            '当前 Key：$_masked',
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _keyController,
-            obscureText: _obscure,
-            decoration: InputDecoration(
-              labelText: 'API Key',
-              suffixIcon: IconButton(
-                icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: AppButton.primary(label: '保存 Key', onPressed: _saveKey),
             ),
-          ),
-          const SizedBox(height: 12),
-          if (_masked.isNotEmpty)
-            Text(
-              '当前 Key：$_masked',
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: FilledButton(
-                  onPressed: _saveKey,
-                  child: const Text('保存 Key'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: _testing ? null : _test,
-            child: Text(
-              _testing
-                  ? (_retryCountdown > 0
-                      ? '自动重试中…（第 $_retryRound/10 次，$_retryCountdown 秒后重试）'
-                      : '测试中…（第 $_retryRound/10 次）')
-                  : '测试连接',
-            ),
-          ),
-          if (_testing && _retryCountdown > 0)
-            TextButton(
-              onPressed: () => setState(() {
-                _retryCancelled = true;
-                _testing = false;
-                _retryCountdown = 0;
-                _message = '已停止自动重试';
-              }),
-              child: const Text('停止自动重试'),
-            ),
-          const SizedBox(height: 8),
-          Row(
-            children: <Widget>[
-              Icon(
-                _verified ? Icons.check_circle : Icons.info_outline,
-                color: _verified ? AppColors.primary : AppColors.textSecondary,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _verified ? '已验证可用' : '尚未验证',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-          if (_message != null) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(_message!, style: const TextStyle(color: AppColors.danger)),
           ],
-          const SizedBox(height: 20),
-          SwitchListTile(
-            title: const Text('允许 AI 收支分析'),
-            subtitle: const Text('仅发送本地聚合统计，AI 只生成点评文案'),
-            value: _analysisConsent,
-            onChanged: (value) => _setConsent(AiPrefsKeys.analysisConsented, value),
+        ),
+        const SizedBox(height: 8),
+        AppButton.secondary(
+          label: _testing
+              ? (_retryCountdown > 0
+                  ? '自动重试中…（第 $_retryRound/10 次，$_retryCountdown 秒后重试）'
+                  : '测试中…（第 $_retryRound/10 次）')
+              : '测试连接',
+          onPressed: _testing ? null : _test,
+        ),
+        if (_testing && _retryCountdown > 0)
+          AppButton.text(
+            label: '停止自动重试',
+            onPressed: () => setState(() {
+              _retryCancelled = true;
+              _testing = false;
+              _retryCountdown = 0;
+              _message = '已停止自动重试';
+            }),
           ),
-          SwitchListTile(
-            title: const Text('允许 AI 识别小票'),
-            subtitle: const Text('图片上传前会二次确认，识别结果需人工审核'),
-            value: _imageConsent,
-            onChanged: (value) => _setConsent(AiPrefsKeys.imageConsentAccepted, value),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _deleteKey,
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('删除已保存的 Key'),
-          ),
-          const SizedBox(height: 32),
+        const SizedBox(height: 8),
+        _statusRow(),
+        if (_message != null) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(_message!, style: const TextStyle(color: AppColors.danger)),
         ],
+        const SizedBox(height: 20),
+        _analysisSwitch(),
+        _imageSwitch(),
+        const SizedBox(height: 16),
+        AppButton.secondary(
+          label: '删除已保存的 Key',
+          icon: Icons.delete_outline,
+          onPressed: _deleteKey,
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  /// 桌面端：左 480（Key + 并排两按钮 + 掩码 + 状态 + 固定高度倒计时）｜右 480（授权 + 安全说明）。
+  Widget _buildDesktopBody() {
+    return ListView(
+      padding: context.pagePadding,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _introCard(),
+                  const SizedBox(height: AppLayout.cardGap),
+                  _keyField(),
+                  const SizedBox(height: 12),
+                  Text(
+                    _masked.isEmpty ? '当前未保存 Key' : '当前 Key：$_masked',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: AppButton.primary(
+                          label: '保存 Key',
+                          onPressed: _saveKey,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppButton.secondary(
+                          label: '测试连接',
+                          onPressed: _testing ? null : _test,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // 倒计时区固定高度，避免文本变化导致布局跳动（C3）。
+                  SizedBox(
+                    height: 24,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _testing
+                            ? (_retryCountdown > 0
+                                ? '第 $_retryRound/10 次，$_retryCountdown 秒后重试'
+                                : '第 $_retryRound/10 次')
+                            : '',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_testing && _retryCountdown > 0)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppButton.text(
+                        label: '停止自动重试',
+                        onPressed: () => setState(() {
+                          _retryCancelled = true;
+                          _testing = false;
+                          _retryCountdown = 0;
+                          _message = '已停止自动重试';
+                        }),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  _statusRow(),
+                  if (_message != null) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Text(
+                      _message!,
+                      style: const TextStyle(color: AppColors.danger),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton.secondary(
+                      label: '删除已保存的 Key',
+                      icon: Icons.delete_outline,
+                      onPressed: _deleteKey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppLayout.sectionGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      children: <Widget>[_analysisSwitch(), _imageSwitch()],
+                    ),
+                  ),
+                  const SizedBox(height: AppLayout.cardGap),
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '安全说明',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            '· Key 仅保存在系统安全存储，不上传任何第三方服务器\n'
+                            '· 只有你主动使用 AI 功能时，脱敏后的数据才会发送到所配置的模型服务\n'
+                            '· 可随时删除 Key，删除后所有 AI 功能立即不可用',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.7,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppLayout.sectionGap),
+      ],
+    );
+  }
+
+  Widget _introCard() {
+    return const Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          '本 App 采用 BYOK（自带 Key）模式。Key 仅保存在系统安全存储中，'
+          '不会上传到任何第三方服务器；只有你主动使用 AI 功能时，'
+          '脱敏后的数据才会发送到你配置的模型服务。',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
       ),
+    );
+  }
+
+  Widget _keyField() {
+    return TextField(
+      controller: _keyController,
+      obscureText: _obscure,
+      decoration: InputDecoration(
+        labelText: 'API Key',
+        suffixIcon: IconButton(
+          icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+          onPressed: () => setState(() => _obscure = !_obscure),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow() {
+    return Row(
+      children: <Widget>[
+        Icon(
+          _verified ? Icons.check_circle : Icons.info_outline,
+          color: _verified ? AppColors.primary : AppColors.textSecondary,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          _verified ? '已验证可用' : '尚未验证',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  Widget _analysisSwitch() {
+    return SwitchListTile(
+      title: const Text('允许 AI 收支分析'),
+      subtitle: const Text('仅发送本地聚合统计，AI 只生成点评文案'),
+      value: _analysisConsent,
+      onChanged: (value) => _setConsent(AiPrefsKeys.analysisConsented, value),
+    );
+  }
+
+  Widget _imageSwitch() {
+    return SwitchListTile(
+      title: const Text('允许 AI 识别小票'),
+      subtitle: const Text('图片上传前会二次确认，识别结果需人工审核'),
+      value: _imageConsent,
+      onChanged: (value) => _setConsent(AiPrefsKeys.imageConsentAccepted, value),
     );
   }
 }

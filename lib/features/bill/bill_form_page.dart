@@ -7,10 +7,17 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/breakpoints.dart';
+import '../../core/layout_tokens.dart';
 import '../../core/theme.dart';
 import '../../data/services/ai_client.dart';
+import '../../domain/models/category.dart';
+import '../../domain/models/ledger.dart';
 import '../../state/providers.dart';
 import '../common/amount_field.dart';
+import '../common/app_buttons.dart';
+import '../common/form_field_row.dart';
+import '../common/responsive_scaffold.dart';
 
 class BillFormPage extends ConsumerStatefulWidget {
   const BillFormPage({super.key});
@@ -36,7 +43,7 @@ class _BillFormPageState extends ConsumerState<BillFormPage> {
   void initState() {
     super.initState();
     final selected = ref.read(selectedLedgerIdProvider);
-    if (selected.isNotEmpty && selected != 'all') {
+    if (selected.isNotEmpty && selected != Ledger.allKey) {
       _ledgerId = selected;
     }
   }
@@ -216,107 +223,376 @@ class _BillFormPageState extends ConsumerState<BillFormPage> {
   Widget build(BuildContext context) {
     final ledgersAsync = ref.watch(ledgersProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
-    final categories = (categoriesAsync.valueOrNull ?? const [])
+    final categories = (categoriesAsync.valueOrNull ?? const <Category>[])
         .where((category) => category.type == _type)
         .toList(growable: false);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('记一笔')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          SegmentedButton<String>(
-            segments: const <ButtonSegment<String>>[
-              ButtonSegment<String>(value: 'expense', label: Text('支出')),
-              ButtonSegment<String>(value: 'income', label: Text('收入')),
-            ],
-            selected: <String>{_type},
-            onSelectionChanged: (values) => setState(() {
-              _type = values.first;
-              _categoryId = null;
-            }),
-          ),
-          const SizedBox(height: 16),
-          AmountField(
-            onCentsChanged: (cents) => setState(() => _amountCents = cents),
-          ),
-          const SizedBox(height: 16),
-          ledgersAsync.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('账本加载失败：$error'),
-            data: (ledgers) => DropdownButtonFormField<String>(
-              initialValue: _ledgerId,
-              decoration: const InputDecoration(labelText: '账本'),
-              items: ledgers
-                  .map(
-                    (ledger) => DropdownMenuItem<String>(
-                      value: ledger.id,
-                      child: Text('${ledger.icon} ${ledger.name}'),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) => setState(() => _ledgerId = value),
+    return ResponsiveScaffold(
+      title: '记一笔',
+      maxWidth: AppLayout.formMaxWidth,
+      backLocation: '/bills',
+      body: context.isCompact
+          ? _buildCompactForm(ledgersAsync, categories)
+          : _buildDesktopForm(ledgersAsync, categories),
+    );
+  }
+
+  /// 手机端表单：字段顺序 / 间距与改造前完全一致。
+  Widget _buildCompactForm(
+    AsyncValue<List<Ledger>> ledgersAsync,
+    List<Category> categories,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        _typeSelector(),
+        const SizedBox(height: 16),
+        AmountField(
+          onCentsChanged: (cents) => setState(() => _amountCents = cents),
+        ),
+        const SizedBox(height: 16),
+        _ledgerField(ledgersAsync),
+        const SizedBox(height: 16),
+        _categoryDropdown(categories),
+        const SizedBox(height: 8),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('账单日期'),
+          subtitle: Text(_billDate),
+          trailing: const Icon(Icons.calendar_today_outlined),
+          onTap: _pickDate,
+        ),
+        const SizedBox(height: 8),
+        _noteField(),
+        const SizedBox(height: 16),
+        _aiRecognizeButton(),
+        if (_image != null) _imageHint(),
+        if (_error != null) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(_error!, style: const TextStyle(color: AppColors.danger)),
+        ],
+        const SizedBox(height: 24),
+        AppButton.primary(
+          label: _saving ? '保存中...' : '保存账单',
+          onPressed: _saving ? null : _save,
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  /// 桌面端表单：480 单列，金额置顶放大、分类图标网格、保存右对齐。
+  Widget _buildDesktopForm(
+    AsyncValue<List<Ledger>> ledgersAsync,
+    List<Category> categories,
+  ) {
+    return ListView(
+      padding: context.pagePadding,
+      children: <Widget>[
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  '金额',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 8),
+                AmountField(
+                  fontSize: 32,
+                  onCentsChanged: (cents) =>
+                      setState(() => _amountCents = cents),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _categoryId,
-            decoration: const InputDecoration(labelText: '分类'),
-            items: categories
-                .map(
-                  (category) => DropdownMenuItem<String>(
-                    value: category.id,
-                    child: Text('${category.icon} ${category.name}'),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: (value) => setState(() => _categoryId = value),
+        ),
+        const SizedBox(height: AppLayout.sectionGap),
+        _typeSelector(),
+        const SizedBox(height: AppLayout.sectionGap),
+        FormRow(label: '账本', child: _ledgerField(ledgersAsync)),
+        FormRow(label: '日期', child: _dateFieldWithShortcuts()),
+        const SizedBox(height: AppLayout.blockGap),
+        const Text(
+          '分类',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 8),
+        _categoryGrid(categories),
+        const SizedBox(height: AppLayout.sectionGap),
+        FormRow(label: '备注', child: _noteField()),
+        const SizedBox(height: AppLayout.blockGap),
+        // 桌面档按钮必须收敛到 <=240（ListView 会给子项 tight 宽度，需 Align 松开）。
+        Align(alignment: Alignment.centerLeft, child: _aiRecognizeButton()),
+        if (_image != null) _imageHint(),
+        if (_error != null) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(_error!, style: const TextStyle(color: AppColors.danger)),
+        ],
+        const SizedBox(height: AppLayout.sectionGap),
+        FormActionBar(
+          secondary: AppButton.text(
+            label: '取消',
+            onPressed: () => context.go('/bills'),
           ),
-          const SizedBox(height: 8),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('账单日期'),
-            subtitle: Text(_billDate),
-            trailing: const Icon(Icons.calendar_today_outlined),
-            onTap: _pickDate,
+          primary: AppButton.primary(
+            label: _saving ? '保存中...' : '保存账单',
+            busy: _saving,
+            onPressed: _save,
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _noteController,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: '备注（可选）'),
+        ),
+        const SizedBox(height: AppLayout.sectionGap),
+      ],
+    );
+  }
+
+  Widget _typeSelector() {
+    return SegmentedButton<String>(
+      segments: const <ButtonSegment<String>>[
+        ButtonSegment<String>(value: 'expense', label: Text('支出')),
+        ButtonSegment<String>(value: 'income', label: Text('收入')),
+      ],
+      selected: <String>{_type},
+      onSelectionChanged: (values) => setState(() {
+        _type = values.first;
+        _categoryId = null;
+      }),
+    );
+  }
+
+  Widget _ledgerField(AsyncValue<List<Ledger>> ledgersAsync) {
+    return ledgersAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (error, _) => Text('账本加载失败：$error'),
+      data: (ledgers) => DropdownButtonFormField<String>(
+        initialValue: _ledgerId,
+        decoration: AppInput.decoration(context, label: '账本'),
+        items: ledgers
+            .map(
+              (ledger) => DropdownMenuItem<String>(
+                value: ledger.id,
+                child: Text('${ledger.icon} ${ledger.name}'),
+              ),
+            )
+            .toList(growable: false),
+        onChanged: (value) => setState(() => _ledgerId = value),
+      ),
+    );
+  }
+
+  Widget _categoryDropdown(List<Category> categories) {
+    return DropdownButtonFormField<String>(
+      initialValue: _categoryId,
+      decoration: const InputDecoration(labelText: '分类'),
+      items: categories
+          .map(
+            (category) => DropdownMenuItem<String>(
+              value: category.id,
+              child: Text('${category.icon} ${category.name}'),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: (value) => setState(() => _categoryId = value),
+    );
+  }
+
+  Widget _dateFieldWithShortcuts() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        InkWell(
+          onTap: _pickDate,
+          borderRadius: BorderRadius.circular(12),
+          child: InputDecorator(
+            decoration: AppInput.decoration(context, label: '账单日期'),
+            child: Row(
+              children: <Widget>[
+                Expanded(child: Text(_billDate)),
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _recognizing ? null : _recognizeFromImage,
-            icon: _recognizing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.image_outlined),
-            label: Text(_recognizing ? '识别中...' : '上传小票，AI 自动填入'),
-          ),
-          if (_image != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '已选择图片：${_image!.name}（保存前请核对所有字段）',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            _QuickDateChip(
+              label: '今天',
+              selected: _billDate == _isoDate(DateTime.now()),
+              onTap: () => setState(() => _billDate = _isoDate(DateTime.now())),
+            ),
+            const SizedBox(width: 8),
+            _QuickDateChip(
+              label: '昨天',
+              selected: _billDate ==
+                  _isoDate(DateTime.now().subtract(const Duration(days: 1))),
+              onTap: () => setState(
+                () => _billDate =
+                    _isoDate(DateTime.now().subtract(const Duration(days: 1))),
               ),
             ),
-          if (_error != null) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: AppColors.danger)),
           ],
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? '保存中...' : '保存账单'),
+        ),
+      ],
+    );
+  }
+
+  Widget _noteField() {
+    return TextField(
+      controller: _noteController,
+      maxLines: context.isCompact ? 2 : 3,
+      decoration: AppInput.decoration(context, label: '备注（可选）'),
+    );
+  }
+
+  /// 分类图标网格：每行 6 个（PRD §5 第 5 页）。
+  Widget _categoryGrid(List<Category> categories) {
+    if (categories.isEmpty) {
+      return const Text('暂无分类');
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const int columns = 6;
+        const double spacing = 8;
+        final double itemWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: categories
+              .map(
+                (category) => SizedBox(
+                  width: itemWidth,
+                  child: _CategoryTile(
+                    category: category,
+                    selected: _categoryId == category.id,
+                    onTap: () => setState(() => _categoryId = category.id),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+
+  Widget _aiRecognizeButton() {
+    return AppButton.secondary(
+      label: _recognizing ? '识别中...' : '上传小票，AI 自动填入',
+      icon: Icons.image_outlined,
+      busy: _recognizing,
+      onPressed: _recognizeFromImage,
+    );
+  }
+
+  Widget _imageHint() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        '已选择图片：${_image!.name}（保存前请核对所有字段）',
+        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      ),
+    );
+  }
+
+  String _isoDate(DateTime date) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)}';
+  }
+}
+
+/// 桌面端分类图标块（图标在上、名称在下）。
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({
+    required this.category,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Category category;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.08)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider,
           ),
-          const SizedBox(height: 24),
-        ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(category.icon, style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 2),
+            Text(
+              category.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: selected ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 日期快捷选项（今天 / 昨天）。
+class _QuickDateChip extends StatelessWidget {
+  const _QuickDateChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.08)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.divider,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: selected ? AppColors.primary : AppColors.textSecondary,
+          ),
+        ),
       ),
     );
   }

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/breakpoints.dart';
 import '../../core/theme.dart';
 import '../../domain/models/user.dart';
 import '../../domain/services/auth_service.dart';
 import '../../state/providers.dart';
+import '../common/app_buttons.dart';
 
 enum _AuthMode { signIn, signUp }
 
@@ -154,83 +156,270 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_restoring) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    // 无壳页：自行按可用宽度判定断点并注入 Scope（架构 A2）。
+    return BreakpointBuilder(
+      builder: (context, breakpoint) {
+        if (breakpoint == AppBreakpoint.compact) {
+          return _buildCompact();
+        }
+        if (breakpoint == AppBreakpoint.expanded) {
+          return _buildWide();
+        }
+        return _buildMedium();
+      },
+    );
+  }
+
+  /// 手机端：与改造前逐字一致的全屏居中表单。
+  Widget _buildCompact() {
     return Scaffold(
       body: SafeArea(
-        child: _restoring
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height -
-                        MediaQuery.of(context).padding.vertical,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.vertical,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Icon(
+                  Icons.savings_outlined,
+                  size: 88,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '省省钱，存存钱',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '记好每一笔，存下每一个目标',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 32),
+                _buildModeTabs(),
+                const SizedBox(height: 20),
+                _buildEmailField(),
+                const SizedBox(height: 12),
+                _buildPasswordField(),
+                if (_mode == _AuthMode.signUp) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _buildNicknameField(),
+                ],
+                const SizedBox(height: 20),
+                _buildSubmitButton(centered: false),
+                const SizedBox(height: 12),
+                AppButton.secondary(
+                  label: '暂不注册，以游客模式体验',
+                  icon: Icons.person_outline,
+                  onPressed: _busy ? null : _signInAsGuest,
+                ),
+                const SizedBox(height: 12),
+                AppButton.text(
+                  label: '已有本机数据？升级为云端账号，开启多端同步',
+                  textStyle: const TextStyle(fontSize: 13),
+                  onPressed: _busy ? null : () => context.go('/upgrade-cloud'),
+                ),
+                const SizedBox(height: 16),
+                if (_error != null) ...<Widget>[
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 13,
+                    ),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  const SizedBox(height: 12),
+                ],
+                _buildAgreementRow(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// medium（600–1023）：单列 420px 居中，不拆分品牌区。
+  Widget _buildMedium() {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            child: SizedBox(width: 420, child: _buildFormCard()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// expanded（>= 1024）：左 52% 品牌区 ｜ 右 48% 表单卡。
+  Widget _buildWide() {
+    return Scaffold(
+      body: Row(
+        children: <Widget>[
+          Expanded(flex: 52, child: _buildBrandPanel()),
+          Expanded(
+            flex: 48,
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: SizedBox(width: 420, child: _buildFormCard()),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 桌面品牌区：墨绿渐变 + 字标 + 一句价值主张。
+  Widget _buildBrandPanel() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: <Color>[AppColors.primaryDark, AppColors.primary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              const Icon(
+                Icons.savings_outlined,
+                size: 64,
+                color: Colors.white,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                '省省钱，存存钱',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '记好每一笔，存下每一个目标。\n本地优先存储，AI 只做脱敏点评。',
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.7,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 32),
+              for (final String point in const <String>[
+                '账本 · 账单 · 目标一体化记账',
+                '每笔收支自动累计目标进度',
+                '云端多端同步，数据只属于你',
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
                     children: <Widget>[
                       const Icon(
-                        Icons.savings_outlined,
-                        size: 88,
-                        color: AppColors.primary,
+                        Icons.check_circle,
+                        size: 18,
+                        color: AppColors.gold,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(width: 10),
                       Text(
-                        '省省钱，存存钱',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        '记好每一笔，存下每一个目标',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 32),
-                      _buildModeTabs(),
-                      const SizedBox(height: 20),
-                      _buildEmailField(),
-                      const SizedBox(height: 12),
-                      _buildPasswordField(),
-                      if (_mode == _AuthMode.signUp) ...<Widget>[
-                        const SizedBox(height: 12),
-                        _buildNicknameField(),
-                      ],
-                      const SizedBox(height: 20),
-                      _buildSubmitButton(),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _signInAsGuest,
-                        icon: const Icon(Icons.person_outline),
-                        label: const Text('暂不注册，以游客模式体验'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => context.go('/upgrade-cloud'),
-                        child: const Text(
-                          '已有本机数据？升级为云端账号，开启多端同步',
-                          style: TextStyle(fontSize: 13),
+                        point,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      if (_error != null) ...<Widget>[
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.danger,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      _buildAgreementRow(),
                     ],
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 桌面 / medium 表单卡（420px 宽内的单列表单）。
+  Widget _buildFormCard() {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              _mode == _AuthMode.signUp ? '创建账号' : '登录',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '记好每一笔，存下每一个目标',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            _buildModeTabs(),
+            const SizedBox(height: 20),
+            _buildEmailField(),
+            const SizedBox(height: 12),
+            _buildPasswordField(),
+            if (_mode == _AuthMode.signUp) ...<Widget>[
+              const SizedBox(height: 12),
+              _buildNicknameField(),
+            ],
+            const SizedBox(height: 20),
+            _buildSubmitButton(centered: true),
+            const SizedBox(height: 12),
+            // 桌面档按钮宽度上限 240（PRD §4.1 / 验收 A4）。
+            Center(
+              child: SizedBox(
+                width: 240,
+                child: AppButton.secondary(
+                  label: '暂不注册，以游客模式体验',
+                  icon: Icons.person_outline,
+                  onPressed: _busy ? null : _signInAsGuest,
+                ),
               ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: AppButton.text(
+                label: '已有本机数据？升级为云端账号',
+                onPressed: _busy ? null : () => context.go('/upgrade-cloud'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_error != null) ...<Widget>[
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.danger, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _buildAgreementRow(),
+          ],
+        ),
       ),
     );
   }
@@ -308,18 +497,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     );
   }
 
-  Widget _buildSubmitButton() {
-    return FilledButton(
+  /// 提交按钮：桌面为 240px 居中，手机端保持全宽（PRD §4.1 全宽例外）。
+  Widget _buildSubmitButton({required bool centered}) {
+    final Widget button = AppButton.primary(
+      label: _mode == _AuthMode.signUp ? '注册并进入' : '登录',
+      busy: _busy,
       onPressed: _busy ? null : _submit,
-      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-      child: _busy
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(_mode == _AuthMode.signUp ? '注册并进入' : '登录'),
     );
+    if (!centered) {
+      return button;
+    }
+    return Center(child: SizedBox(width: 240, child: button));
   }
 
   Widget _buildAgreementRow() {

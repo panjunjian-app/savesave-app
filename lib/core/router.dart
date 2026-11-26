@@ -8,6 +8,8 @@ import '../features/auth/upgrade_cloud_page.dart';
 import '../features/bill/bill_detail_page.dart';
 import '../features/bill/bill_form_page.dart';
 import '../features/bill/bill_list_page.dart';
+import '../features/common/app_buttons.dart';
+import '../features/common/app_shell.dart';
 import '../features/goal/goal_detail_page.dart';
 import '../features/goal/goal_form_page.dart';
 import '../features/home/home_page.dart';
@@ -38,73 +40,86 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => const HomePage()),
+      // 全屏品牌页 / 引导页：留在导航壳外（架构 §3.3）。
       GoRoute(path: '/login', builder: (context, state) => const AuthPage()),
-      GoRoute(path: '/home', builder: (context, state) => const HomePage()),
-      GoRoute(path: '/goals', builder: (context, state) => const HomePage()),
-      GoRoute(
-        path: '/goals/create',
-        builder: (context, state) => const GoalFormPage(),
-      ),
-      GoRoute(
-        path: '/goals/edit/:id',
-        builder: (context, state) => GoalFormPage(
-          goalId: state.pathParameters['id'],
-        ),
-      ),
-      GoRoute(
-        path: '/goals/:id',
-        builder: (context, state) => GoalDetailPage(
-          goalId: state.pathParameters['id'] ?? '',
-        ),
-      ),
-      GoRoute(
-        path: '/ledgers',
-        builder: (context, state) => const LedgerListPage(),
-      ),
-      GoRoute(
-        path: '/ledgers/create',
-        builder: (context, state) => const LedgerFormPage(),
-      ),
-      GoRoute(path: '/bills', builder: (context, state) => const BillListPage()),
-      GoRoute(
-        path: '/bills/new',
-        builder: (context, state) => const BillFormPage(),
-      ),
-      GoRoute(
-        path: '/bills/:id',
-        builder: (context, state) => BillDetailPage(
-          billId: state.pathParameters['id'] ?? '',
-        ),
-      ),
-      GoRoute(path: '/stats', builder: (context, state) => const StatsPage()),
-      GoRoute(
-        path: '/analysis/report',
-        builder: (context, state) => const AnalysisReportPage(),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => const SettingsPage(),
-      ),
-      GoRoute(
-        path: '/settings/ai-config',
-        builder: (context, state) => const AiConfigPage(),
-      ),
-      GoRoute(
-        path: '/settings/sync',
-        builder: (context, state) => const SyncSettingsPage(),
-      ),
-      GoRoute(
-        path: '/settings/update',
-        builder: (context, state) => const UpdatePage(),
-      ),
       GoRoute(
         path: '/upgrade-cloud',
         builder: (context, state) => const UpgradeCloudPage(),
       ),
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfilePage(),
+      // 其余 18 条路由统一进壳：路径、参数、builder 全部不变，只做「移动 + 包壳」。
+      ShellRoute(
+        builder: (context, state, child) => AppShell(
+          location: state.matchedLocation,
+          child: child,
+        ),
+        routes: <RouteBase>[
+          GoRoute(path: '/', builder: (context, state) => const HomePage()),
+          GoRoute(path: '/home', builder: (context, state) => const HomePage()),
+          GoRoute(path: '/goals', builder: (context, state) => const HomePage()),
+          GoRoute(
+            path: '/goals/create',
+            builder: (context, state) => const GoalFormPage(),
+          ),
+          GoRoute(
+            path: '/goals/edit/:id',
+            builder: (context, state) => GoalFormPage(
+              goalId: state.pathParameters['id'],
+            ),
+          ),
+          GoRoute(
+            path: '/goals/:id',
+            builder: (context, state) => GoalDetailPage(
+              goalId: state.pathParameters['id'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: '/ledgers',
+            builder: (context, state) => const LedgerListPage(),
+          ),
+          GoRoute(
+            path: '/ledgers/create',
+            builder: (context, state) => const LedgerFormPage(),
+          ),
+          GoRoute(
+            path: '/bills',
+            builder: (context, state) => const BillListPage(),
+          ),
+          GoRoute(
+            path: '/bills/new',
+            builder: (context, state) => const BillFormPage(),
+          ),
+          GoRoute(
+            path: '/bills/:id',
+            builder: (context, state) => BillDetailPage(
+              billId: state.pathParameters['id'] ?? '',
+            ),
+          ),
+          GoRoute(path: '/stats', builder: (context, state) => const StatsPage()),
+          GoRoute(
+            path: '/analysis/report',
+            builder: (context, state) => const AnalysisReportPage(),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: '/settings/ai-config',
+            builder: (context, state) => const AiConfigPage(),
+          ),
+          GoRoute(
+            path: '/settings/sync',
+            builder: (context, state) => const SyncSettingsPage(),
+          ),
+          GoRoute(
+            path: '/settings/update',
+            builder: (context, state) => const UpdatePage(),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfilePage(),
+          ),
+        ],
       ),
     ],
     errorBuilder: (context, state) => _PlaceholderPage(
@@ -134,9 +149,9 @@ class _PlaceholderPage extends StatelessWidget {
             const SizedBox(height: 8),
             Text('路由 $path · 页面即将上线'),
             const SizedBox(height: 24),
-            FilledButton(
+            AppButton.primary(
+              label: '前往首页',
               onPressed: () => context.go('/home'),
-              child: const Text('前往首页'),
             ),
           ],
         ),

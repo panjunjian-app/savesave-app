@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'breakpoints.dart';
+
 /// Brand palette: dark green + warm gold on warm off-white.
 abstract final class AppColors {
   static const Color primary = Color(0xFF1F6F5C);
@@ -55,7 +57,8 @@ abstract final class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(48),
+          // v4：禁止全宽按钮（PRD §4.1 / 架构 A4），最小尺寸固定 120×48。
+          minimumSize: const Size(120, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.0),
           ),
@@ -64,7 +67,8 @@ abstract final class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
-          minimumSize: const Size.fromHeight(48),
+          // v4：禁止全宽按钮（PRD §4.1 / 架构 A4）。
+          minimumSize: const Size(120, 48),
           side: const BorderSide(color: AppColors.primary),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.0),
@@ -145,7 +149,8 @@ abstract final class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          // v4：禁止全宽按钮（PRD §4.1 / 架构 A4）。
+          minimumSize: const Size(120, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.0),
           ),
@@ -156,4 +161,29 @@ abstract final class AppTheme {
       ),
     );
   }
+
+  /// 金额展示样式：等宽数字（PRD §4.2），compact 28 / 桌面 32。
+  ///
+  /// 收支色由调用方传 [color]（`AppColors.primary` / `AppColors.danger`）。
+  static TextStyle amountTextStyle(
+    AppBreakpoint breakpoint, {
+    Color? color,
+    double compactSize = 28,
+    double desktopSize = 32,
+  }) {
+    return TextStyle(
+      fontSize: breakpoint == AppBreakpoint.compact ? compactSize : desktopSize,
+      fontWeight: FontWeight.w700,
+      color: color ?? AppColors.textPrimary,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+  }
+
+  /// 表格数值列样式（等宽数字 + 半粗）。
+  static const TextStyle tableNumericStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+  );
 }

@@ -5,8 +5,13 @@ import '../../core/theme.dart';
 import '../../state/providers.dart';
 
 /// 同步状态轻量标识（home 页 AppBar，PRD R5：同步中/已同步/离线待同步 N 条）。
+///
+/// v4：新增可选 [showLabel]（侧栏底部展开态显示文字，默认 false = 现状）。
 class SyncStatusBadge extends ConsumerWidget {
-  const SyncStatusBadge({super.key});
+  const SyncStatusBadge({super.key, this.showLabel = false});
+
+  /// true 时以「图标 + 文字」形式渲染（用于 240px 侧栏底部）。
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -56,11 +61,59 @@ class SyncStatusBadge extends ConsumerWidget {
         break;
     }
 
+    if (showLabel) {
+      return Tooltip(
+        message: _tooltip(status),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => ref.read(syncServiceProvider).syncNow(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                icon,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _label(status),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return IconButton(
       tooltip: _tooltip(status),
       icon: icon,
       onPressed: () => ref.read(syncServiceProvider).syncNow(),
     );
+  }
+
+  /// 侧栏文字标签（短句，避免撑破 240px 侧栏）。
+  String _label(SyncStatus status) {
+    switch (status.phase) {
+      case SyncPhase.pulling:
+      case SyncPhase.pushing:
+        return '同步中…';
+      case SyncPhase.offline:
+        return '离线模式';
+      case SyncPhase.error:
+        return '同步失败';
+      case SyncPhase.idle:
+        return status.pendingCount > 0
+            ? '待同步 ${status.pendingCount} 条'
+            : '已同步';
+    }
   }
 
   String _tooltip(SyncStatus status) {
