@@ -124,6 +124,13 @@ class _LedgerFormPageState extends ConsumerState<LedgerFormPage> {
           label: _saving ? '创建中...' : '创建账本',
           onPressed: _saving ? null : _save,
         ),
+        const SizedBox(height: 8),
+        Center(
+          child: AppButton.text(
+            label: '取消',
+            onPressed: _saving ? null : () => context.go('/ledgers'),
+          ),
+        ),
       ],
     );
   }

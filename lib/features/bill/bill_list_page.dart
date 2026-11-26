@@ -52,6 +52,9 @@ class _BillListPageState extends ConsumerState<BillListPage> {
     return ResponsiveScaffold(
       title: compact ? '$ledgerName · 账单明细' : '账单明细',
       fillHeight: true,
+      // /bills 不在手机端底部 Tab 白名单里（架构 §3.2），没有返回箭头会成为死路：
+      // 记一笔 → 返回 → 账单明细后无处可去。桌面端该页是侧栏一级入口，不需要箭头。
+      backLocation: compact ? '/home' : null,
       actions: <Widget>[
         if (compact)
           PopupMenuButton<String>(

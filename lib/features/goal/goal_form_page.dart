@@ -233,6 +233,19 @@ class _GoalFormPageState extends ConsumerState<GoalFormPage> {
           label: _saving ? '保存中...' : '保存目标',
           onPressed: _saving ? null : _save,
         ),
+        const SizedBox(height: 8),
+        Center(
+          child: AppButton.text(
+            label: '取消',
+            onPressed: _saving
+                ? null
+                : () => context.go(
+                      widget.goalId != null
+                          ? '/goals/${widget.goalId}'
+                          : '/home',
+                    ),
+          ),
+        ),
         const SizedBox(height: 24),
       ],
     );

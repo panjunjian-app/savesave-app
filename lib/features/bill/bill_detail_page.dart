@@ -30,7 +30,8 @@ class BillDetailPage extends ConsumerWidget {
       ),
       error: (error, _) => ResponsiveScaffold(
         title: '账单详情',
-        showAppBar: false,
+        // 加载失败必须有退路，否则手机端是一张没有任何出口的死页。
+        backLocation: '/bills',
         maxWidth: AppLayout.readerMaxWidth,
         body: Center(child: Text('加载失败：$error')),
       ),
@@ -38,6 +39,7 @@ class BillDetailPage extends ConsumerWidget {
         if (bill == null) {
           return const ResponsiveScaffold(
             title: '账单不存在',
+            backLocation: '/bills',
             maxWidth: AppLayout.readerMaxWidth,
             body: Center(child: Text('账单可能已被删除')),
           );

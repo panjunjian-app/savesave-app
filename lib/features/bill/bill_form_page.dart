@@ -276,6 +276,13 @@ class _BillFormPageState extends ConsumerState<BillFormPage> {
           label: _saving ? '保存中...' : '保存账单',
           onPressed: _saving ? null : _save,
         ),
+        const SizedBox(height: 8),
+        Center(
+          child: AppButton.text(
+            label: '取消',
+            onPressed: _saving ? null : () => context.go('/bills'),
+          ),
+        ),
         const SizedBox(height: 24),
       ],
     );

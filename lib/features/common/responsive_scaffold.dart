@@ -88,21 +88,54 @@ class ResponsiveScaffold extends StatelessWidget {
 
   Widget _buildWithBreakpoint(BuildContext context, AppBreakpoint breakpoint) {
     if (breakpoint == AppBreakpoint.compact) {
-      return _compactScaffold();
+      return _compactScaffold(context);
     }
     return _desktopScaffold(context, breakpoint);
   }
 
   /// 旧路径：手机端与改造前逐字一致（AppBar 居中、FAB、下拉刷新、无宽度约束）。
-  Widget _compactScaffold() {
+  ///
+  /// v1.4.0 唯一增强：`backLocation` 非空时补返回箭头，并用 [PopScope] 接管
+  /// 系统返回键。原因：全站路由统一 `context.go`，页面栈里没有上一页，
+  /// `Navigator.canPop` 恒为 false —— 二级页在手机端既没有返回箭头，
+  /// 系统返回键还会直接退出 App（用户反馈：新增账本误入后无法取消）。
+  Widget _compactScaffold(BuildContext context) {
     final Widget content = body ?? const SizedBox.shrink();
     final Future<void> Function()? refresh = onRefresh;
-    return Scaffold(
-      appBar: showAppBar ? AppBar(title: Text(title), actions: actions) : null,
+    final String? back = backLocation;
+    final Widget page = Scaffold(
+      appBar: showAppBar
+          ? AppBar(
+              title: Text(title),
+              actions: actions,
+              // back 为 null 时不覆写 leading，保留 `automaticallyImplyLeading`
+              // 的默认行为（可 pop 的页面仍由框架自动加箭头）。
+              leading: back == null
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: '返回',
+                      onPressed: () => context.go(back),
+                    ),
+            )
+          : null,
       floatingActionButton: floatingActionButton,
       body: refresh == null
           ? content
           : RefreshIndicator(onRefresh: refresh, child: content),
+    );
+    if (back == null) {
+      return page;
+    }
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, Object? result) {
+        if (didPop) {
+          return;
+        }
+        context.go(back);
+      },
+      child: page,
     );
   }
 
